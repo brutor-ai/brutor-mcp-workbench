@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { WhaleLogo } from './components/WhaleLogo';
+import { BrutorLogo } from './components/BrutorLogo';
 import { ChatTab } from './components/ChatTab';
 import { CapabilitiesTab } from './components/CapabilitiesTab';
 import { ConfigTab } from './components/ConfigTab';
@@ -614,7 +614,7 @@ const MainApp: React.FC = () => {
         <div className="flex border-b tab-header">
           {/* Logo and Title */}
           <div className="flex items-center px-4 py-2 border-r border-white border-opacity-30">
-            <WhaleLogo size="medium" showText={true} className="text-white" />
+            <BrutorLogo size="medium" showText={true} className="text-white" />
           </div>
           
           <button

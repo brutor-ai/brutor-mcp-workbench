@@ -15,7 +15,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { WhaleLogo } from './WhaleLogo';
+import { BrutorLogo } from './BrutorLogo';
 import { Send, Loader2, Copy, Check, FileText, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react';
 import { ChatMessage, MCPCapabilities, MCPResource, MCPPrompt, ChatAttachment, MCPResourceTemplate } from '../types';
 import { ResourceSelector } from './ResourceSelector';
@@ -395,7 +395,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
           ) : displayMessages.length === 0 ? (
             <div className="text-center text-muted p-4">
               <div className="flex justify-center mb-4">
-                <WhaleLogo size="large" showText={false} />
+                <BrutorLogo size="large" showText={false} />
               </div>
               <div className="mb-2 font-semibold">Welcome to Brutor MCP Client</div>
               <div className="text-small">Start a conversation with your AI assistant</div>

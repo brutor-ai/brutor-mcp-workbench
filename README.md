@@ -166,7 +166,7 @@ Use Discovery: ✓ (to find endpoints automatically)
 - **CapabilitiesTab.tsx**: Interactive MCP testing
 - **ConfigTab.tsx**: Configuration and connection management
 - **LogsPanel.tsx**: Real-time operation logging
-- **WhaleLogo.tsx**: Animated Brutor branding component
+- **BrutorLogo.tsx**: Animated Brutor branding component
 
 ## Development
 
@@ -183,7 +183,7 @@ npm run format       # Format code with Prettier
 ### Project Structure
 ```
 src/
-├── components/          # React components including WhaleLogo
+├── components/          # React components including BrutorLogo
 ├── hooks/              # Custom React hooks
 ├── lib/                # Core libraries (MCP, OAuth, OpenAI)
 ├── styles/             # CSS and styling
