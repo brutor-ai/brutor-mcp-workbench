@@ -1925,3 +1925,232 @@ input[type="checkbox"]:checked::after {
 .chat-welcome-logo:hover {
   opacity: 1;
 }
+
+/* Header/Tab styling with sky blue theme - GATEWAY ADMIN STYLE */
+.tab-header {
+  background: linear-gradient(135deg, #87ceeb 0%, #87ceeb 100%);
+  border-bottom: 2px solid #6bb6e6;
+  flex-shrink: 0;
+}
+
+.tab-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: none;
+  padding: 8px 24px; /* Increased from 8px 16px to 8px 24px for wider tabs */
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  color: #1e3a8a;
+  backdrop-filter: blur(10px);
+  min-width: 140px; /* Add minimum width for consistency */
+  text-align: center; /* Center align text */
+}
+
+.tab-button.active {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.9);
+  margin-bottom: -1px;
+  color: #1e40af;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tab-button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.4);
+  color: #1e40af;
+}
+
+/* Footer styling with sky blue theme */
+.footer, .input-area {
+  background: linear-gradient(135deg, #87ceeb 0%, #87ceeb 100%);
+  border-top: 2px solid #6bb6e6;
+  flex-shrink: 0;
+}
+
+.footer .status-text {
+  color: #1e3a8a;
+  font-weight: 500;
+}
+
+/* Logo container in header */
+.logo-container {
+  background: rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.logo-container .brutor-logo {
+  color: white;
+}
+
+/* Sky blue color variants */
+.text-sky-400 {
+  color: #38BDF8;
+}
+
+.text-sky-300 {
+  color: #7DD3FC;
+}
+
+.text-sky-200 {
+  color: #BAE6FD;
+}
+
+.text-sky-600 {
+  color: #0284C7;
+}
+
+.text-sky-700 {
+  color: #0369A1;
+}
+
+/* Enhanced blue text colors for header */
+.text-blue-900 {
+  color: #1e3a8a;
+}
+
+.text-blue-700 {
+  color: #1d4ed8;
+}
+
+.text-blue-600 {
+  color: #2563eb;
+}
+
+/* Status colors */
+.status-connected {
+  color: #22c55e;
+}
+
+.status-disconnected {
+  color: #ef4444;
+}
+
+.status-pending {
+  color: #f59e0b;
+}
+
+/* Input area specific styling */
+.input-area textarea {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #1e40af;
+}
+
+.input-area textarea:focus {
+  background: rgba(255, 255, 255, 1);
+  border-color: #1e40af;
+  box-shadow: 0 0 0 2px rgba(30, 64, 175, 0.2);
+}
+
+.input-area textarea::placeholder {
+  color: #64748b;
+}
+
+/* Button styling in sky blue areas */
+.tab-header .btn,
+.input-area .btn {
+  background: #1e40af;
+  border-color: #1e40af;
+  color: white;
+}
+
+.tab-header .btn:hover,
+.input-area .btn:hover {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+}
+
+.tab-header .btn-outline,
+.input-area .btn-outline {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1e40af;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.tab-header .btn-outline:hover,
+.input-area .btn-outline:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: #1e40af;
+}
+
+/* Badge styling for capabilities */
+.tab-button .bg-blue-100 {
+  background-color: rgba(219, 234, 254, 0.8);
+}
+
+/* Brutor logo animations */
+@keyframes brutor-float {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-1px) rotate(1deg);
+  }
+  66% {
+    transform: translateY(1px) rotate(-1deg);
+  }
+}
+
+.brutor-logo:hover img {
+  animation: brutor-float 3s ease-in-out infinite;
+}
+
+/* Enhanced header spacing */
+.tab-header .flex.items-center.space-x-4 > div:first-child {
+  display: flex;
+  align-items: center;
+  min-width: fit-content;
+}
+
+/* User info styling in header */
+.bg-blue-50 {
+  background-color: rgba(239, 246, 255, 0.9);
+  backdrop-filter: blur(8px);
+}
+
+.bg-blue-100 {
+  background-color: rgba(219, 234, 254, 0.9);
+}
+
+/* Connection status indicators */
+.w-2.h-2.rounded-full.bg-green-400 {
+  background-color: #4ade80;
+  box-shadow: 0 0 4px rgba(74, 222, 128, 0.5);
+}
+
+.w-2.h-2.rounded-full.bg-gray-400 {
+  background-color: #9ca3af;
+}
+
+/* Loading spinner in header */
+.animate-spin.h-3.w-3 {
+  border-color: #3b82f6;
+  border-top-color: transparent;
+}
+
+/* Tab border styling */
+.border-b.border-blue-200.bg-sky-100 {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  border-bottom: 1px solid #7dd3fc;
+}
+
+/* Ensure proper layout constraints */
+.h-screen.flex.flex-col {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.flex-1.overflow-hidden {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.flex-1.overflow-y-auto {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+}

@@ -62,7 +62,7 @@ export const BrutorLogo: React.FC<BrutorLogoProps> = ({
       </div>
       {showText && (
         <span className={`font-bold text-gray-900 ${textSizeClasses[size]} tracking-tight`}>
-          MCP Gateway Admin
+          MCP Workbench
         </span>
       )}
     </div>

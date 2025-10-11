@@ -70,6 +70,9 @@ export class AuthCodeFlowManager {
   private tokenExpiryTimestamp: number | null = null;
   private userInfo: UserInfo | null = null;
 
+  // Add static flag to prevent duplicate exchanges across instances
+  private static isExchangingToken = false;
+
   constructor(config: OAuthConfig, onLogEntry?: (entry: any) => void) {
     this.config = config;
     this.onLogEntry = onLogEntry;
@@ -203,55 +206,73 @@ export class AuthCodeFlowManager {
     return tokenInfo;
   }
 
-  private async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenInfo> {
-    if (!this.config.tokenEndpoint) {
-      throw new Error('Token endpoint is required');
-    }
+    private async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenInfo> {
+        // Guard against duplicate exchanges
+        if (AuthCodeFlowManager.isExchangingToken) {
+            console.warn('Token exchange already in progress, waiting...');
+            // Wait a bit and return current token if available
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            if (this.currentToken) {
+                return this.currentToken;
+            }
+            throw new Error('Token exchange already in progress');
+        }
 
-    const response = await fetch(this.config.tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json'
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: this.config.clientId,
-        code: code,
-        redirect_uri: window.location.origin + '/callback',
-        code_verifier: codeVerifier
-      })
-    });
+        AuthCodeFlowManager.isExchangingToken = true;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorDetail = errorText;
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorDetail = errorJson.error_description || errorJson.error || errorText;
-      } catch {
-        // Use raw text if not JSON
-      }
-      throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorDetail}`);
-    }
+        try {
+            if (!this.config.tokenEndpoint) {
+                throw new Error('Token endpoint is required');
+            }
 
-    const tokenData = await response.json();
+            const response = await fetch(this.config.tokenEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json'
+                },
+                body: new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    client_id: this.config.clientId,
+                    code: code,
+                    redirect_uri: window.location.origin + '/callback',
+                    code_verifier: codeVerifier
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                let errorDetail = errorText;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorDetail = errorJson.error_description || errorJson.error || errorText;
+                } catch {
+                    // Use raw text if not JSON
+                }
+                throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorDetail}`);
+            }
+
+            const tokenData = await response.json();
     
-    // Log what we received to debug
-    console.log('Token exchange response:', {
-      hasAccessToken: !!tokenData.access_token,
-      hasIdToken: !!tokenData.id_token,
-      hasRefreshToken: !!tokenData.refresh_token,
-      tokenType: tokenData.token_type,
-      scope: tokenData.scope
-    });
-    
-    // Ensure we have an ID token - this is crucial for logout
-    if (!tokenData.id_token) {
-      console.warn('No ID token received - logout may not work properly. Check that "openid" scope is included.');
-    }
+            // Log what we received to debug
+            console.log('Token exchange response:', {
+              hasAccessToken: !!tokenData.access_token,
+              hasIdToken: !!tokenData.id_token,
+              hasRefreshToken: !!tokenData.refresh_token,
+              tokenType: tokenData.token_type,
+              scope: tokenData.scope
+            });
 
-    return tokenData;
+            // Ensure we have an ID token - this is crucial for logout
+            if (!tokenData.id_token) {
+              console.warn('No ID token received - logout may not work properly. Check that "openid" scope is included.');
+            }
+
+            return tokenData;
+        } finally {
+            // Always clear the flag
+            AuthCodeFlowManager.isExchangingToken = false;
+        }
   }
 
   // Check if user is authenticated
