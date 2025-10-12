@@ -54,8 +54,18 @@ const MainApp: React.FC = () => {
         localStorage.getItem('endpointSameAsBase') === 'true'
     );
 
+    const [enablePortCheck, setEnablePortCheck] = useState<boolean>(() => {
+        const stored = localStorage.getItem('enablePortCheck');
+        return stored !== null ? JSON.parse(stored) : true;
+    });
+
     const [enableHealthCheck, setEnableHealthCheck] = useState<boolean>(() => {
         const stored = localStorage.getItem('enableHealthCheck');
+        return stored !== null ? JSON.parse(stored) : true;
+    });
+
+    const [enableCorsCheck, setEnableCorsCheck] = useState<boolean>(() => {
+        const stored = localStorage.getItem('enableCorsCheck');
         return stored !== null ? JSON.parse(stored) : true;
     });
 
@@ -102,8 +112,16 @@ const MainApp: React.FC = () => {
     }, [endpointSameAsBase]);
 
     useEffect(() => {
+        localStorage.setItem('enablePortCheck', JSON.stringify(enablePortCheck));
+    }, [enablePortCheck]);
+
+    useEffect(() => {
         localStorage.setItem('enableHealthCheck', JSON.stringify(enableHealthCheck));
     }, [enableHealthCheck]);
+
+    useEffect(() => {
+        localStorage.setItem('enableCorsCheck', JSON.stringify(enableCorsCheck));
+    }, [enableCorsCheck]);
 
     useEffect(() => {
         localStorage.setItem('openaiApiKey', openaiApiKey);
@@ -171,13 +189,16 @@ const MainApp: React.FC = () => {
                     serverUrl: mcpServerUrl,
                     mcpEndpointPath: endpointSameAsBase ? 'same as base URL' : mcpEndpointPath,
                     endpointSameAsBase,
+                    enablePortCheck,
                     enableHealthCheck,
+                    enableCorsCheck,
                     oauthEnabled: oauthConfig.enabled,
                     oauthFlow: oauthConfig.flow,
-                    model: selectedModel
+                    model: selectedModel,
+                    clientOrigin: window.location.origin
                 }
             });
-
+            
             await connect(
                 mcpServerUrl,
                 mcpEndpointPath,
@@ -186,6 +207,8 @@ const MainApp: React.FC = () => {
                 oauthConfig,
                 addLogEntry,
                 endpointSameAsBase,
+                enablePortCheck,
+                enableCorsCheck,
                 enableHealthCheck
             );
 
@@ -198,21 +221,28 @@ const MainApp: React.FC = () => {
                     serverUrl: mcpServerUrl,
                     mcpEndpointPath: endpointSameAsBase ? 'same as base URL' : mcpEndpointPath,
                     endpointSameAsBase,
+                    enablePortCheck,
                     enableHealthCheck,
+                    enableCorsCheck,
                     oauthEnabled: oauthConfig.enabled,
                     oauthFlow: oauthConfig.flow,
-                    model: selectedModel
+                    model: selectedModel,
+                    clientOrigin: window.location.origin
                 },
                 response: {
                     tools: capabilities.tools.length,
                     resources: capabilities.resources.length,
                     resourceTemplates: capabilities.resourceTemplates.length,
                     prompts: capabilities.prompts.length,
+                    portCheckPerformed: enablePortCheck,
+                    corsCheckPerformed: enableCorsCheck,
                     healthCheckPerformed: enableHealthCheck
                 }
             });
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Connection failed';
+            const isCorsError = (err as any)?.isCorsError || errorMessage.includes('CORS_ERROR');
+            const isConnectionRefused = (err as any)?.isConnectionRefused || errorMessage.includes('CONNECTION_REFUSED');
 
             addLogEntry({
                 source: 'MCP',
@@ -223,15 +253,26 @@ const MainApp: React.FC = () => {
                     serverUrl: mcpServerUrl,
                     mcpEndpointPath: endpointSameAsBase ? 'same as base URL' : mcpEndpointPath,
                     endpointSameAsBase,
+                    enablePortCheck,
                     enableHealthCheck,
+                    enableCorsCheck,
                     oauthEnabled: oauthConfig.enabled,
                     oauthFlow: oauthConfig.flow,
-                    model: selectedModel
+                    model: selectedModel,
+                    clientOrigin: window.location.origin,
+                    isCorsError,
+                    isConnectionRefused
                 },
-                response: { error: errorMessage }
+                response: {
+                    error: errorMessage,
+                    errorType: isCorsError ? 'CORS' : isConnectionRefused ? 'CONNECTION_REFUSED' : 'CONNECTION'
+                }
             });
+
+            // CRITICAL: Re-throw to let ConfigTab handle the error display
+            throw err;
         }
-    }, [connect, mcpServerUrl, mcpEndpointPath, endpointSameAsBase, enableHealthCheck, openaiApiKey, selectedModel, oauthConfig, addLogEntry, capabilities]);
+    }, [connect, mcpServerUrl, mcpEndpointPath, endpointSameAsBase, enablePortCheck, enableCorsCheck, enableHealthCheck, openaiApiKey, selectedModel, oauthConfig, addLogEntry, capabilities]);
 
     // FIXED: Check if we're in an OAuth callback - ONLY RUN ONCE
     useEffect(() => {
@@ -649,6 +690,16 @@ const MainApp: React.FC = () => {
                     <div className="text-xs text-blue-700">
                         Model: {selectedModel.toUpperCase()}
                     </div>
+                    {enablePortCheck && (
+                        <div className="text-xs text-blue-700">
+                            Port ✓
+                        </div>
+                    )}
+                    {enableCorsCheck && (
+                        <div className="text-xs text-blue-700">
+                            CORS ✓
+                        </div>
+                    )}
                     {enableHealthCheck && (
                         <div className="text-xs text-blue-700">
                             Health ✓
@@ -757,8 +808,12 @@ const MainApp: React.FC = () => {
                             onPromptUse={handlePromptUse}
                             onLogEntry={addLogEntry}
                             tokenManager={tokenManager}
+                            enablePortCheck={enablePortCheck}
+                            onEnablePortCheckChange={setEnablePortCheck}
                             enableHealthCheck={enableHealthCheck}
                             onEnableHealthCheckChange={setEnableHealthCheck}
+                            enableCorsCheck={enableCorsCheck}
+                            onEnableCorsCheckChange={setEnableCorsCheck}
                         />
                     )}
                 </div>
