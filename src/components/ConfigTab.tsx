@@ -14,162 +14,24 @@
  * limitations under the License.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Loader2, Eye, EyeOff, CheckCircle, AlertCircle, Play, Server, Shield, X, Clock } from 'lucide-react';
-import { MCPCapabilities, MCPResource, MCPPrompt, OAuthConfig } from '../types';
+import React, { useState } from 'react';
+import { Server, Shield, Cpu, TestTube, Play, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { OAuthConfiguration } from './OAuthConfiguration';
-import { ModelSelector } from './ModelSelector';
-import { ConnectionErrorModal } from './ConnectionErrorModal';
 
-interface ConfigTabProps {
-    serverBaseUrl: string;
-    onServerBaseUrlChange: (url: string) => void;
-    mcpEndpointPath: string;
-    onMcpEndpointPathChange: (path: string) => void;
-    endpointSameAsBase: boolean;
-    onEndpointSameAsBaseChange: (same: boolean) => void;
-    openaiApiKey: string;
-    onOpenaiApiKeyChange: (key: string) => void;
-    selectedModel: string;
-    onSelectedModelChange: (model: string) => void;
-    oauthToken: string;
-    onOauthTokenChange: (token: string) => void;
-    oauthConfig: OAuthConfig;
-    onOauthConfigChange: (config: OAuthConfig) => void;
-    connected: boolean;
-    loading: boolean;
-    capabilities: MCPCapabilities;
-    onConnect: () => void;
-    onDisconnect: (performOAuthLogout?: boolean) => void;
-    onResourceRead: (resource: MCPResource) => void;
-    onPromptUse: (prompt: MCPPrompt) => void;
-    onLogEntry?: (entry: any) => void;
-    tokenManager?: any;
-    enablePortCheck: boolean;
-    onEnablePortCheckChange: (enabled: boolean) => void;
-    enableCorsCheck: boolean;
-    onEnableCorsCheckChange: (enabled: boolean) => void;
-    enableHealthCheck: boolean;
-    onEnableHealthCheckChange: (enabled: boolean) => void;
-}
-
-interface DiscoveryStep {
-    id: string;
-    name: string;
-    status: 'pending' | 'loading' | 'success' | 'error';
-    url?: string;
-    data?: any;
-    error?: string;
-}
-
-interface TestResult {
-    status: 'success' | 'error' | 'skipped';
-    message: string;
-    duration?: number;
-}
-
-interface PreConnectionTestResults {
-    portTest?: TestResult;
-    corsTest?: TestResult;
-    healthTest?: TestResult;
-}
-
-export const ConfigTab: React.FC<ConfigTabProps> = ({
-                                                        serverBaseUrl,
-                                                        onServerBaseUrlChange,
-                                                        mcpEndpointPath,
-                                                        onMcpEndpointPathChange,
-                                                        endpointSameAsBase,
-                                                        onEndpointSameAsBaseChange,
-                                                        openaiApiKey,
-                                                        onOpenaiApiKeyChange,
-                                                        selectedModel,
-                                                        onSelectedModelChange,
-                                                        oauthToken,
-                                                        onOauthTokenChange,
-                                                        oauthConfig,
-                                                        onOauthConfigChange,
-                                                        connected,
-                                                        loading,
-                                                        capabilities,
-                                                        onConnect,
-                                                        onDisconnect,
-                                                        onResourceRead,
-                                                        onPromptUse,
-                                                        onLogEntry,
-                                                        tokenManager,
-                                                        enablePortCheck,
-                                                        onEnablePortCheckChange,
-                                                        enableCorsCheck,
-                                                        onEnableCorsCheckChange,
-                                                        enableHealthCheck,
-                                                        onEnableHealthCheckChange
-                                                    }) => {
-    const [showOpenAIKey, setShowOpenAIKey] = useState(false);
+// Sub-tab for MCP Server Configuration
+const MCPServerTab = ({
+                          serverBaseUrl,
+                          onServerBaseUrlChange,
+                          mcpEndpointPath,
+                          onMcpEndpointPathChange,
+                          endpointSameAsBase,
+                          onEndpointSameAsBaseChange,
+                          disabled
+                      }) => {
+    const [testResult, setTestResult] = useState('');
     const [testingConnection, setTestingConnection] = useState(false);
-    const [testResult, setTestResult] = useState<string>('');
-    const [connectionError, setConnectionError] = useState<any>(null);
-    const [testResults, setTestResults] = useState<PreConnectionTestResults | null>(null);
-    const [showTestResults, setShowTestResults] = useState(false);
-    const [discoverySteps, setDiscoverySteps] = useState<DiscoveryStep[]>([]);
-    const [isDiscovering, setIsDiscovering] = useState(false);
-    const lastDiscoveredUrl = useRef<string>('');
 
-    // Clear connection error when settings change
-    useEffect(() => {
-        setConnectionError(null);
-    }, [serverBaseUrl, mcpEndpointPath, endpointSameAsBase, oauthConfig]);
-
-    // Listen for test results from logs
-    useEffect(() => {
-        // This will be populated when the pre-connection tests complete
-        // The onLogEntry will be called with the test results
-    }, []);
-
-    const testConnection = async () => {
-        setTestingConnection(true);
-        setTestResult('');
-
-        try {
-            if (enableHealthCheck) {
-                const testUrl = endpointSameAsBase ?
-                    `${serverBaseUrl.replace(/\/+$/, '')}/health` :
-                    `${serverBaseUrl.replace(/\/+$/, '')}/health`;
-
-                const response = await fetch(testUrl, {
-                    method: 'GET',
-                    mode: 'cors',
-                    headers: {
-                        'Accept': 'application/json',
-                        ...(oauthToken && { 'Authorization': `Bearer ${oauthToken}` })
-                    }
-                });
-
-                if (response.ok) {
-                    setTestResult('Health check successful');
-                } else {
-                    setTestResult(`Health check failed: ${response.status} ${response.statusText}`);
-                }
-            } else {
-                // Skip health check - just validate URL format
-                if (isValidUrl(serverBaseUrl)) {
-                    setTestResult('URL validation successful (health check skipped)');
-                } else {
-                    setTestResult('Invalid URL format');
-                }
-            }
-        } catch (error) {
-            if (enableHealthCheck) {
-                setTestResult(`Health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            } else {
-                setTestResult(`URL validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
-        } finally {
-            setTestingConnection(false);
-        }
-    };
-
-    const isValidUrl = (url: string) => {
+    const isValidUrl = (url) => {
         try {
             new URL(url);
             return true;
@@ -178,20 +40,454 @@ export const ConfigTab: React.FC<ConfigTabProps> = ({
         }
     };
 
-    const isValidPath = (path: string) => {
-        if (endpointSameAsBase) {
-            return true;
-        }
+    const isValidPath = (path) => {
+        if (endpointSameAsBase) return true;
         return path.startsWith('/') && path.length > 1;
     };
 
-    const isValidOpenAIKey = (key: string) => {
+    const getFullMcpUrl = () => {
+        if (!serverBaseUrl) return '';
+        if (endpointSameAsBase) {
+            return serverBaseUrl;
+        } else {
+            return `${serverBaseUrl.replace(/\/+$/, '')}${mcpEndpointPath || '/api/mcp'}`;
+        }
+    };
+
+    const testConnection = async () => {
+        setTestingConnection(true);
+        setTestResult('');
+
+        try {
+            const testUrl = serverBaseUrl.replace(/\/+$/, '') + '/health';
+            const response = await fetch(testUrl, {
+                method: 'GET',
+                mode: 'cors',
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (response.ok) {
+                setTestResult('Health check successful');
+            } else {
+                setTestResult(`Health check failed: ${response.status}`);
+            }
+        } catch (error) {
+            setTestResult(`Health check failed: ${error.message}`);
+        } finally {
+            setTestingConnection(false);
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="card">
+                <h3 className="text-sm font-medium mb-3">Server Base URL</h3>
+
+                <div className="form-group">
+                    <label htmlFor="serverBaseUrl">Server Base URL</label>
+                    <div className="flex space-x-2">
+                        <div className="flex-1 relative">
+                            <input
+                                type="text"
+                                id="serverBaseUrl"
+                                value={serverBaseUrl}
+                                onChange={(e) => onServerBaseUrlChange(e.target.value)}
+                                placeholder={endpointSameAsBase ? "https://api.githubcopilot.com/mcp" : "http://localhost:3000"}
+                                disabled={disabled}
+                                className="w-full"
+                            />
+                            {serverBaseUrl && (
+                                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                                    {isValidUrl(serverBaseUrl) ? (
+                                        <CheckCircle className="w-3 h-3 text-green-500" />
+                                    ) : (
+                                        <AlertCircle className="w-3 h-3 text-red-500" />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <button
+                            onClick={testConnection}
+                            disabled={testingConnection || !serverBaseUrl || !isValidUrl(serverBaseUrl)}
+                            className="btn btn-outline"
+                        >
+                            {testingConnection ? 'Testing...' : 'Test'}
+                        </button>
+                    </div>
+
+                    <div className="text-xs text-gray-600 mt-1">
+                        {endpointSameAsBase
+                            ? 'Complete MCP server URL (e.g., https://api.githubcopilot.com/mcp)'
+                            : 'Base URL of your server (e.g., http://localhost:3000)'
+                        }
+                    </div>
+                    {testResult && (
+                        <div className={`text-xs mt-1 ${testResult.includes('successful') ? 'text-green-600' : 'text-red-600'}`}>
+                            {testResult}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="card">
+                <h3 className="text-sm font-medium mb-3">MCP Protocol Endpoint Configuration</h3>
+
+                <div className="form-group">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={endpointSameAsBase}
+                            onChange={(e) => {
+                                onEndpointSameAsBaseChange(e.target.checked);
+                                if (e.target.checked) {
+                                    onMcpEndpointPathChange('');
+                                } else {
+                                    onMcpEndpointPathChange('/api/mcp');
+                                }
+                            }}
+                            disabled={disabled}
+                            className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">MCP endpoint is the same as Server Base URL</span>
+                    </label>
+                    <div className="text-xs text-gray-600 mt-1">
+                        Check this if your MCP server URL is complete (e.g., https://api.githubcopilot.com/mcp)
+                    </div>
+                </div>
+
+                {!endpointSameAsBase && (
+                    <div className="form-group">
+                        <label htmlFor="mcpEndpointPath">MCP Protocol Endpoint Path</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                id="mcpEndpointPath"
+                                value={mcpEndpointPath}
+                                onChange={(e) => onMcpEndpointPathChange(e.target.value)}
+                                placeholder="/api/mcp"
+                                disabled={disabled}
+                                className="w-full"
+                            />
+                            {mcpEndpointPath && (
+                                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                                    {isValidPath(mcpEndpointPath) ? (
+                                        <CheckCircle className="w-3 h-3 text-green-500" />
+                                    ) : (
+                                        <AlertCircle className="w-3 h-3 text-red-500" />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                            Path to append to the base URL (must start with /)
+                        </div>
+                    </div>
+                )}
+
+                <div className="mt-3">
+                    <div className="text-xs font-medium text-gray-700 mb-1">Complete MCP URL:</div>
+                    <div className="font-mono text-xs bg-gray-50 p-2 rounded border break-all">
+                        {getFullMcpUrl() || 'Enter Server Base URL first'}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Sub-tab for OAuth Configuration - simply wraps the OAuthConfiguration component
+const OAuthTab = ({
+                      oauthConfig,
+                      onOauthConfigChange,
+                      serverBaseUrl,
+                      mcpEndpointPath,
+                      endpointSameAsBase,
+                      disabled,
+                      tokenManager,
+                      onLogEntry
+                  }) => {
+    const getFullMcpUrl = () => {
+        if (!serverBaseUrl) return '';
+        if (endpointSameAsBase) {
+            return serverBaseUrl;
+        } else {
+            return `${serverBaseUrl.replace(/\/+$/, '')}${mcpEndpointPath || '/api/mcp'}`;
+        }
+    };
+
+    return (
+        <div className="space-y-4">
+            <OAuthConfiguration
+                config={oauthConfig}
+                onConfigChange={onOauthConfigChange}
+                serverUrl={getFullMcpUrl()}
+                disabled={disabled}
+                onLogEntry={onLogEntry}
+                tokenManager={tokenManager}
+                hideDiscovery={false}
+            />
+
+            <div className="card bg-blue-50 border-blue-200">
+                <h4 className="text-xs font-medium text-blue-900 mb-2">💡 Quick Setup Guide</h4>
+                <div className="text-xs text-blue-800 space-y-1">
+                    <div><strong>For PKCE Flow (Recommended for Browser Apps):</strong></div>
+                    <div className="ml-3">
+                        • Configure as public client in your OAuth server
+                    </div>
+                    <div className="ml-3">
+                        • Add redirect URI: <code className="bg-blue-100 px-1 rounded">{window.location.origin}/callback</code>
+                    </div>
+                    <div className="ml-3">
+                        • Enable CORS for: <code className="bg-blue-100 px-1 rounded">{window.location.origin}</code>
+                    </div>
+                    <div className="ml-3 mt-1">
+                        • Use the "Discover" button to auto-configure endpoints
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Sub-tab for Pre-Connection Tests
+const PreConnectionTestsTab = ({
+                                   enablePortCheck,
+                                   onEnablePortCheckChange,
+                                   enableCorsCheck,
+                                   onEnableCorsCheckChange,
+                                   enableHealthCheck,
+                                   onEnableHealthCheckChange,
+                                   disabled
+                               }) => {
+    return (
+        <div className="space-y-4">
+            <div className="card">
+                <h3 className="text-sm font-medium mb-3">Pre-Connection Tests</h3>
+                <p className="text-xs text-gray-600 mb-4">
+                    Configure which tests to run before attempting MCP connection. These tests help diagnose connection issues.
+                </p>
+
+                <div className="space-y-3">
+                    <div className="form-group">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={enablePortCheck}
+                                onChange={(e) => onEnablePortCheckChange(e.target.checked)}
+                                disabled={disabled}
+                                className="rounded border-gray-300"
+                            />
+                            <span className="text-sm font-medium">Enable port connectivity test</span>
+                        </label>
+                        <div className="text-xs text-gray-600 mt-1 ml-6">
+                            {enablePortCheck
+                                ? 'Tests if the server is reachable at the specified URL and port'
+                                : 'Skip port test - connection may fail without clear error message'
+                            }
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={enableCorsCheck}
+                                onChange={(e) => onEnableCorsCheckChange(e.target.checked)}
+                                disabled={disabled}
+                                className="rounded border-gray-300"
+                            />
+                            <span className="text-sm font-medium">Enable CORS configuration test</span>
+                        </label>
+                        <div className="text-xs text-gray-600 mt-1 ml-6">
+                            {enableCorsCheck
+                                ? 'Verifies CORS headers allow requests from this origin'
+                                : 'Skip CORS test - may result in unclear CORS errors'
+                            }
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={enableHealthCheck}
+                                onChange={(e) => onEnableHealthCheckChange(e.target.checked)}
+                                disabled={disabled}
+                                className="rounded border-gray-300"
+                            />
+                            <span className="text-sm font-medium">Enable health endpoint test (/health)</span>
+                        </label>
+                        <div className="text-xs text-gray-600 mt-1 ml-6">
+                            {enableHealthCheck
+                                ? 'Tests if /health endpoint responds correctly'
+                                : 'Skip health test - some servers don\'t provide /health endpoint'
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="card bg-blue-50 border-blue-200">
+                <h4 className="text-xs font-medium text-blue-900 mb-2">💡 Recommendation</h4>
+                <p className="text-xs text-blue-800">
+                    Keep Port and CORS tests enabled for best error diagnosis. Disable Health test only if your server doesn't provide a /health endpoint.
+                </p>
+            </div>
+        </div>
+    );
+};
+
+// Sub-tab for OpenAI Configuration
+const OpenAIConfigTab = ({
+                             openaiApiKey,
+                             onOpenaiApiKeyChange,
+                             selectedModel,
+                             onSelectedModelChange,
+                             disabled
+                         }) => {
+    const [showOpenAIKey, setShowOpenAIKey] = useState(false);
+
+    const isValidOpenAIKey = (key) => {
+        return key.startsWith('sk-') && key.length > 20;
+    };
+
+    const OPENAI_MODELS = [
+        {
+            id: 'gpt-4o',
+            name: 'GPT-4o',
+            description: 'Most capable model, great for complex tasks',
+            contextWindow: 128000,
+            costPer1kTokens: { input: 0.005, output: 0.015 }
+        },
+        {
+            id: 'gpt-4o-mini',
+            name: 'GPT-4o Mini',
+            description: 'Faster and cheaper, good for simple tasks',
+            contextWindow: 128000,
+            costPer1kTokens: { input: 0.00015, output: 0.0006 }
+        },
+        {
+            id: 'gpt-4-turbo',
+            name: 'GPT-4 Turbo',
+            description: 'Previous generation, reliable performance',
+            contextWindow: 128000,
+            costPer1kTokens: { input: 0.01, output: 0.03 }
+        }
+    ];
+
+    const selectedModelInfo = OPENAI_MODELS.find(m => m.id === selectedModel) || OPENAI_MODELS[0];
+
+    return (
+        <div className="space-y-4">
+            <div className="card">
+                <h3 className="text-sm font-medium mb-3">OpenAI Configuration</h3>
+
+                <div className="form-group">
+                    <label htmlFor="modelSelect">OpenAI Model</label>
+                    <select
+                        id="modelSelect"
+                        value={selectedModel}
+                        onChange={(e) => onSelectedModelChange(e.target.value)}
+                        disabled={disabled}
+                        className="w-full"
+                    >
+                        {OPENAI_MODELS.map((model) => (
+                            <option key={model.id} value={model.id}>
+                                {model.name} - {model.description}
+                            </option>
+                        ))}
+                    </select>
+
+                    <div className="mt-2 p-2 bg-gray-50 rounded border text-xs">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <span className="font-medium">Context:</span> {(selectedModelInfo.contextWindow / 1000).toFixed(0)}K tokens
+                            </div>
+                            <div>
+                                <span className="font-medium">Cost:</span> ${selectedModelInfo.costPer1kTokens.input}/1K in / ${selectedModelInfo.costPer1kTokens.output}/1K out
+                            </div>
+                        </div>
+                        <div className="mt-1 text-gray-600">
+                            {selectedModelInfo.description}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="form-group">
+                    <label htmlFor="openaiKey">OpenAI API Key</label>
+                    <div className="relative">
+                        <input
+                            type={showOpenAIKey ? "text" : "password"}
+                            id="openaiKey"
+                            value={openaiApiKey}
+                            onChange={(e) => onOpenaiApiKeyChange(e.target.value)}
+                            placeholder="sk-..."
+                            disabled={disabled}
+                            className="w-full pr-8"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowOpenAIKey(!showOpenAIKey)}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400"
+                        >
+                            {showOpenAIKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                    </div>
+                    {openaiApiKey && !isValidOpenAIKey(openaiApiKey) && (
+                        <div className="text-xs text-red-500 mt-1">
+                            Invalid API key format
+                        </div>
+                    )}
+                    <div className="text-xs text-gray-600 mt-1">
+                        Get your API key from <a href="https://platform.openai.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">platform.openai.com</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Sub-tab for Connection Summary
+const ConnectTab = ({
+                        serverBaseUrl,
+                        mcpEndpointPath,
+                        endpointSameAsBase,
+                        oauthConfig,
+                        selectedModel,
+                        openaiApiKey,
+                        enablePortCheck,
+                        enableCorsCheck,
+                        enableHealthCheck,
+                        connected,
+                        loading,
+                        onConnect,
+                        onDisconnect,
+                        tokenManager
+                    }) => {
+    const getFullMcpUrl = () => {
+        if (!serverBaseUrl) return '';
+        if (endpointSameAsBase) {
+            return serverBaseUrl;
+        } else {
+            return `${serverBaseUrl.replace(/\/+$/, '')}${mcpEndpointPath || '/api/mcp'}`;
+        }
+    };
+
+    const isValidUrl = (url) => {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    const isValidOpenAIKey = (key) => {
         return key.startsWith('sk-') && key.length > 20;
     };
 
     const canConnect = () => {
         const basicRequirements = serverBaseUrl && isValidUrl(serverBaseUrl) &&
-            (endpointSameAsBase || (mcpEndpointPath && isValidPath(mcpEndpointPath))) &&
             openaiApiKey && isValidOpenAIKey(openaiApiKey);
 
         if (!oauthConfig.enabled) {
@@ -209,7 +505,7 @@ export const ConfigTab: React.FC<ConfigTabProps> = ({
 
     const authenticationStatus = () => {
         if (!oauthConfig.enabled) {
-            return 'OAuth Disabled';
+            return { status: 'OAuth Disabled', color: 'text-gray-600' };
         }
 
         if (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') {
@@ -218,912 +514,337 @@ export const ConfigTab: React.FC<ConfigTabProps> = ({
 
             if (isAuthenticated) {
                 if (userPermissions.canWrite) {
-                    return 'Authenticated (Write Access)';
+                    return { status: 'Authenticated (Write Access)', color: 'text-green-600' };
                 } else if (userPermissions.canRead) {
-                    return 'Authenticated (Read Access)';
+                    return { status: 'Authenticated (Read Access)', color: 'text-blue-600' };
                 } else {
-                    return 'Authenticated (No Access)';
+                    return { status: 'Authenticated (No Access)', color: 'text-yellow-600' };
                 }
             } else {
-                return 'Not Authenticated';
+                return { status: 'Not Authenticated', color: 'text-red-600' };
             }
         } else {
-            return tokenManager?.isTokenValid() ? 'Service Authenticated' : 'Not Authenticated';
+            return tokenManager?.isTokenValid()
+                ? { status: 'Service Authenticated', color: 'text-green-600' }
+                : { status: 'Not Authenticated', color: 'text-red-600' };
         }
     };
 
-    const getCurrentAccessToken = () => {
-        if (oauthConfig.enabled && oauthConfig.flow === 'client_credentials' && tokenManager?.isTokenValid()) {
-            const token = tokenManager.getAccessToken();
-            return token ? `${token.substring(0, 20)}...` : '';
-        }
-        return '';
-    };
-
-    const getFullMcpUrl = () => {
-        if (!serverBaseUrl) return '';
-
-        if (endpointSameAsBase) {
-            return serverBaseUrl;
-        } else {
-            return `${serverBaseUrl.replace(/\/+$/, '')}${mcpEndpointPath || '/api/mcp'}`;
-        }
-    };
-
-    const updateDiscoveryStep = (id: string, updates: Partial<DiscoveryStep>) => {
-        setDiscoverySteps(prev => prev.map(step =>
-            step.id === id ? { ...step, ...updates } : step
-        ));
-    };
-
-    const discoverOAuthEndpoints = async () => {
-        const fullMcpUrl = getFullMcpUrl();
-        if (!fullMcpUrl || !oauthConfig.enabled || isDiscovering) {
-            return;
-        }
-
-        if (!oauthConfig.clientId || ((oauthConfig.flow === 'client_credentials' || oauthConfig.flow === 'authorization_code') && !oauthConfig.clientSecret)) {
-            setDiscoverySteps([{
-                id: 'validation',
-                name: 'Prerequisites Check',
-                status: 'error',
-                error: 'Client ID and Client Secret must be configured before discovery'
-            }]);
-            return;
-        }
-
-        console.log('Starting OAuth discovery process...');
-        setIsDiscovering(true);
-
-        const mcpUrl = `${fullMcpUrl.replace(/\/+$/, '')}`;
-
-        setDiscoverySteps([
-            {
-                id: 'mcp-endpoint',
-                name: 'MCP Server Endpoint',
-                status: 'pending',
-                url: mcpUrl
-            },
-            {
-                id: 'resource',
-                name: 'OAuth Protected Resource',
-                status: 'pending'
-            },
-            {
-                id: 'authserver',
-                name: 'Authorization Server (IdP)',
-                status: 'pending'
-            }
-        ]);
-
-        lastDiscoveredUrl.current = fullMcpUrl;
-
-        try {
-            updateDiscoveryStep('mcp-endpoint', { status: 'loading', url: mcpUrl });
-
-            const mcpResponse = await fetch(mcpUrl, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-                mode: 'cors'
-            });
-
-            let resourceMetadataUrl = null;
-
-            if (mcpResponse.status === 401) {
-                const wwwAuthHeader = mcpResponse.headers.get('www-authenticate');
-
-                if (wwwAuthHeader) {
-                    const resourceMetadataMatch = wwwAuthHeader.match(/resource_metadata="([^"]+)"/);
-                    if (resourceMetadataMatch) {
-                        resourceMetadataUrl = resourceMetadataMatch[1];
-
-                        updateDiscoveryStep('mcp-endpoint', {
-                            status: 'success',
-                            data: {
-                                wwwAuthenticate: wwwAuthHeader,
-                                resourceMetadata: resourceMetadataUrl
-                            }
-                        });
-                    } else {
-                        updateDiscoveryStep('mcp-endpoint', {
-                            status: 'error',
-                            error: 'www-authenticate header missing resource_metadata parameter'
-                        });
-                        throw new Error('www-authenticate header missing resource_metadata parameter');
-                    }
-                } else {
-                    updateDiscoveryStep('mcp-endpoint', {
-                        status: 'error',
-                        error: 'No www-authenticate header found in 401 response'
-                    });
-                    throw new Error('No www-authenticate header found - server may not support OAuth');
-                }
-            } else if (mcpResponse.ok) {
-                resourceMetadataUrl = `${fullMcpUrl.replace(/\/+$/, '')}/.well-known/oauth-protected-resource`;
-
-                updateDiscoveryStep('mcp-endpoint', {
-                    status: 'success',
-                    data: {
-                        note: 'No authentication required - using default resource metadata URL',
-                        resourceMetadata: resourceMetadataUrl
-                    }
-                });
-            } else {
-                updateDiscoveryStep('mcp-endpoint', {
-                    status: 'error',
-                    error: `MCP endpoint returned ${mcpResponse.status} ${mcpResponse.statusText}`
-                });
-                throw new Error(`MCP endpoint returned ${mcpResponse.status} ${mcpResponse.statusText}`);
-            }
-
-            updateDiscoveryStep('resource', {
-                status: 'loading',
-                url: resourceMetadataUrl,
-                name: 'OAuth Protected Resource'
-            });
-
-            const resourceResponse = await fetch(resourceMetadataUrl, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-                mode: 'cors'
-            });
-
-            if (!resourceResponse.ok) {
-                throw new Error(`Resource metadata discovery failed: ${resourceResponse.status} ${resourceResponse.statusText}`);
-            }
-
-            const resourceData = await resourceResponse.json();
-            updateDiscoveryStep('resource', { status: 'success', data: resourceData });
-
-            const authServerUrl = resourceData.authorization_servers?.[0];
-
-            if (!authServerUrl) {
-                updateDiscoveryStep('authserver', {
-                    status: 'error',
-                    error: 'No authorization servers found in resource metadata'
-                });
-                throw new Error('No authorization servers found in resource metadata');
-            }
-
-            let discoveryUrl: string;
-            let discoveryType: string;
-
-            if (oauthConfig.flow === 'client_credentials') {
-                discoveryUrl = `${authServerUrl}/.well-known/oauth-authorization-server`;
-                discoveryType = 'OAuth 2.0 Authorization Server';
-            } else {
-                discoveryUrl = `${authServerUrl}/.well-known/openid-configuration`;
-                discoveryType = 'OpenID Connect';
-            }
-
-            updateDiscoveryStep('authserver', {
-                status: 'loading',
-                url: discoveryUrl,
-                name: `${discoveryType} (${new URL(authServerUrl).hostname})`
-            });
-
-            const authResponse = await fetch(discoveryUrl, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-                mode: 'cors'
-            });
-
-            if (!authResponse.ok) {
-                if (authResponse.status === 404) {
-                    throw new Error(`${discoveryType} discovery not found (404). Check if realm supports ${oauthConfig.flow} flow`);
-                } else {
-                    throw new Error(`Authorization server returned ${authResponse.status} ${authResponse.statusText}`);
-                }
-            }
-
-            const authData = await authResponse.json();
-
-            updateDiscoveryStep('authserver', {
-                status: 'success',
-                data: authData
-            });
-
-            let updatedConfig: any;
-            if (oauthConfig.flow === 'client_credentials') {
-                const availableScopes = resourceData.scopes_supported || [];
-                let defaultScope = '';
-
-                if (availableScopes.length > 0) {
-                    defaultScope = availableScopes.join(' ');
-                } else {
-                    defaultScope = 'openid';
-                }
-
-                updatedConfig = {
-                    ...oauthConfig,
-                    tokenEndpoint: oauthConfig.tokenEndpoint || authData.token_endpoint,
-                    scope: oauthConfig.scope || defaultScope,
-                    authEndpoint: undefined,
-                    logoutEndpoint: undefined
-                };
-            } else {
-                updatedConfig = {
-                    ...oauthConfig,
-                    authEndpoint: oauthConfig.authEndpoint || authData.authorization_endpoint,
-                    tokenEndpoint: oauthConfig.tokenEndpoint || authData.token_endpoint,
-                    logoutEndpoint: oauthConfig.logoutEndpoint || authData.end_session_endpoint,
-                    postLogoutRedirectUri: oauthConfig.postLogoutRedirectUri || window.location.origin,
-                    scope: oauthConfig.scope || resourceData.scopes_supported?.join(' ') || 'openid profile'
-                };
-            }
-
-            onOauthConfigChange(updatedConfig);
-            console.log('OAuth discovery completed successfully');
-
-        } catch (error) {
-            console.error('OAuth discovery failed:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Discovery failed';
-
-            const failedStep = discoverySteps.find(s => s.status === 'loading')?.id || 'unknown';
-            updateDiscoveryStep(failedStep, {
-                status: 'error',
-                error: errorMessage
-            });
-        } finally {
-            setIsDiscovering(false);
-        }
-    };
-
-    const getStepIcon = (step: DiscoveryStep) => {
-        switch (step.status) {
-            case 'loading': return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
-            case 'success': return <CheckCircle className="w-4 h-4 text-green-500" />;
-            case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />;
-            default:
-                switch (step.id) {
-                    case 'mcp-endpoint': return <Server className="w-4 h-4 text-purple-400" />;
-                    case 'resource': return <Server className="w-4 h-4 text-blue-400" />;
-                    case 'authserver': return <Shield className="w-4 h-4 text-gray-400" />;
-                    default: return <Server className="w-4 h-4 text-gray-400" />;
-                }
-        }
-    };
-
-    const getTestIcon = (result?: TestResult) => {
-        if (!result) return <Server className="w-5 h-5 text-gray-400" />;
-
-        switch (result.status) {
-            case 'success':
-                return <CheckCircle className="w-5 h-5 text-green-500" />;
-            case 'error':
-                return <AlertCircle className="w-5 h-5 text-red-500" />;
-            case 'skipped':
-                return <Server className="w-5 h-5 text-gray-400" />;
-        }
-    };
-
-    const TestResultsModal = () => {
-        if (!showTestResults || !testResults) return null;
-
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
-                    {/* Header */}
-                    <div className="flex items-center justify-between p-4 border-b">
-                        <h2 className="text-lg font-semibold text-gray-900">Pre-Connection Test Results</h2>
-                        <button
-                            onClick={() => setShowTestResults(false)}
-                            className="text-gray-400 hover:text-gray-600"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-6 space-y-4">
-                        {/* Port Test */}
-                        <div className="border rounded-lg p-4">
-                            <div className="flex items-start space-x-3">
-                                <div className="flex-shrink-0 mt-0.5">
-                                    {getTestIcon(testResults.portTest)}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-semibold text-gray-900">Port Connectivity Test</h3>
-                                        {testResults.portTest?.duration && (
-                                            <span className="flex items-center text-xs text-gray-500">
-                                                <Clock className="w-3 h-3 mr-1" />
-                                                {testResults.portTest.duration}ms
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className={`text-sm mt-1 ${
-                                        testResults.portTest?.status === 'success' ? 'text-green-700' :
-                                            testResults.portTest?.status === 'error' ? 'text-red-700' :
-                                                'text-gray-600'
-                                    }`}>
-                                        {testResults.portTest?.message || 'No result'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* CORS Test */}
-                        <div className="border rounded-lg p-4">
-                            <div className="flex items-start space-x-3">
-                                <div className="flex-shrink-0 mt-0.5">
-                                    {getTestIcon(testResults.corsTest)}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-semibold text-gray-900">CORS Configuration Test</h3>
-                                        {testResults.corsTest?.duration && (
-                                            <span className="flex items-center text-xs text-gray-500">
-                                                <Clock className="w-3 h-3 mr-1" />
-                                                {testResults.corsTest.duration}ms
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className={`text-sm mt-1 ${
-                                        testResults.corsTest?.status === 'success' ? 'text-green-700' :
-                                            testResults.corsTest?.status === 'error' ? 'text-red-700' :
-                                                'text-gray-600'
-                                    }`}>
-                                        {testResults.corsTest?.message || 'No result'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Health Test */}
-                        <div className="border rounded-lg p-4">
-                            <div className="flex items-start space-x-3">
-                                <div className="flex-shrink-0 mt-0.5">
-                                    {getTestIcon(testResults.healthTest)}
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-semibold text-gray-900">Health Endpoint Test</h3>
-                                        {testResults.healthTest?.duration && (
-                                            <span className="flex items-center text-xs text-gray-500">
-                                                <Clock className="w-3 h-3 mr-1" />
-                                                {testResults.healthTest.duration}ms
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className={`text-sm mt-1 ${
-                                        testResults.healthTest?.status === 'success' ? 'text-green-700' :
-                                            testResults.healthTest?.status === 'error' ? 'text-red-700' :
-                                                'text-gray-600'
-                                    }`}>
-                                        {testResults.healthTest?.message || 'No result'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Summary */}
-                        <div className="mt-6 pt-4 border-t">
-                            <div className="text-sm text-gray-600">
-                                <strong>Summary:</strong> {
-                                [testResults.portTest, testResults.corsTest, testResults.healthTest]
-                                    .filter(t => t?.status === 'success').length
-                            } of {
-                                [testResults.portTest, testResults.corsTest, testResults.healthTest]
-                                    .filter(t => t?.status !== 'skipped').length
-                            } tests passed
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex justify-end p-4 border-t bg-gray-50">
-                        <button
-                            onClick={() => setShowTestResults(false)}
-                            className="btn btn-outline"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    const authStatus = authenticationStatus();
 
     return (
-        <div className="h-full flex">
-            {/* Test Results Modal */}
-            <TestResultsModal />
+        <div className="space-y-4">
+            <div className="card">
+                <h3 className="text-sm font-medium mb-3">Configuration Summary</h3>
 
-            {/* Connection Error Modal */}
-            <ConnectionErrorModal
-                error={connectionError}
-                onClose={() => setConnectionError(null)}
-                mcpEndpointPath={endpointSameAsBase ? 'same as base URL' : mcpEndpointPath}
-                serverBaseUrl={serverBaseUrl}
-            />
-
-            {/* Left Column - Main Configuration */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4" style={{ paddingBottom: '60px' }}>
-                <div className="max-w-xl space-y-4">
-                    <h2 className="text-small font-medium mb-3">Server Configuration</h2>
-
-                    {/* Connection Status */}
-                    <div className="card">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-small font-medium">Connection Status</span>
-                            <span className={`text-small ${connected ? 'status-connected' : 'status-disconnected'}`}>
-                {connected ? '● Connected' : '○ Disconnected'}
+                {/* MCP Server Summary */}
+                <div className="mb-4 p-3 bg-gray-50 rounded border">
+                    <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
+                        <Server className="w-3 h-3 mr-1" />
+                        MCP Server
+                    </h4>
+                    <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">URL:</span>
+                            <span className="font-mono text-gray-900 truncate ml-2">{getFullMcpUrl() || 'Not configured'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">Status:</span>
+                            <span className={isValidUrl(serverBaseUrl) ? 'text-green-600' : 'text-red-600'}>
+                {isValidUrl(serverBaseUrl) ? '✓ Valid' : '✗ Invalid'}
               </span>
                         </div>
-                        {connected && (
-                            <div className="text-small text-muted">
-                                Tools: {capabilities.tools.length}, Resources: {capabilities.resources.length}, Prompts: {capabilities.prompts.length}
-                                {selectedModel && <span> | Model: {selectedModel}</span>}
-                            </div>
+                    </div>
+                </div>
+
+                {/* OAuth Summary */}
+                <div className="mb-4 p-3 bg-gray-50 rounded border">
+                    <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
+                        <Shield className="w-3 h-3 mr-1" />
+                        Authentication
+                    </h4>
+                    <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">OAuth:</span>
+                            <span className={oauthConfig.enabled ? 'text-green-600' : 'text-gray-600'}>
+                {oauthConfig.enabled ? 'Enabled' : 'Disabled'}
+              </span>
+                        </div>
+                        {oauthConfig.enabled && (
+                            <>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Flow:</span>
+                                    <span className="font-mono text-gray-900">{oauthConfig.flow}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600">Status:</span>
+                                    <span className={authStatus.color}>{authStatus.status}</span>
+                                </div>
+                            </>
                         )}
+                    </div>
+                </div>
 
-                        {/* Authentication Status */}
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                            <div className="flex items-center justify-between">
-                                <span className="text-small font-medium">Authentication</span>
-                                <span className="text-small text-muted">
-                  {authenticationStatus()}
-                </span>
-                            </div>
-
-                            {oauthConfig.enabled && oauthConfig.flow === 'client_credentials' && getCurrentAccessToken() && (
-                                <div className="mt-1 text-xs text-gray-600">
-                                    Active Token: {getCurrentAccessToken()}
-                                </div>
-                            )}
+                {/* OpenAI Summary */}
+                <div className="mb-4 p-3 bg-gray-50 rounded border">
+                    <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
+                        <Cpu className="w-3 h-3 mr-1" />
+                        Language Model
+                    </h4>
+                    <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">Model:</span>
+                            <span className="font-mono text-gray-900">{selectedModel}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">API Key:</span>
+                            <span className={isValidOpenAIKey(openaiApiKey) ? 'text-green-600' : 'text-red-600'}>
+                {isValidOpenAIKey(openaiApiKey) ? '✓ Valid' : '✗ Invalid'}
+              </span>
                         </div>
                     </div>
+                </div>
 
-                    {/* MCP Server URL Configuration */}
-                    <div className="card">
-                        <h3 className="text-small font-medium mb-3">MCP Server URL</h3>
-
-                        {/* Server Base URL */}
-                        <div className="form-group">
-                            <label htmlFor="serverBaseUrl">Server Base URL</label>
-                            <div className="flex space-x-2">
-                                <div className="flex-1 relative">
-                                    <input
-                                        type="text"
-                                        id="serverBaseUrl"
-                                        value={serverBaseUrl}
-                                        onChange={(e) => onServerBaseUrlChange(e.target.value)}
-                                        placeholder={endpointSameAsBase ? "https://api.githubcopilot.com/mcp" : "http://localhost:3000"}
-                                        className="w-full"
-                                    />
-                                    {serverBaseUrl && (
-                                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                                            {isValidUrl(serverBaseUrl) ? (
-                                                <CheckCircle className="w-3 h-3 text-green-500" />
-                                            ) : (
-                                                <AlertCircle className="w-3 h-3 text-red-500" />
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                <button
-                                    onClick={testConnection}
-                                    disabled={testingConnection || !serverBaseUrl || !isValidUrl(serverBaseUrl)}
-                                    className="btn btn-outline"
-                                >
-                                    {testingConnection ? (
-                                        <>
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                            Testing
-                                        </>
-                                    ) : (
-                                        enableHealthCheck ? 'Health Check' : 'Validate URL'
-                                    )}
-                                </button>
-                            </div>
-
-                            <div className="text-small text-muted mt-1">
-                                {endpointSameAsBase
-                                    ? 'Complete MCP server URL (e.g., https://api.githubcopilot.com/mcp)'
-                                    : 'Base URL of your server (e.g., http://localhost:3000)'
-                                }
-                            </div>
-                            {testResult && (
-                                <div className={`text-small mt-1 ${testResult.includes('successful') ? 'status-connected' : 'text-red-500'}`}>
-                                    {testResult}
-                                </div>
-                            )}
+                {/* Pre-Connection Tests Summary */}
+                <div className="mb-4 p-3 bg-gray-50 rounded border">
+                    <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
+                        <TestTube className="w-3 h-3 mr-1" />
+                        Pre-Connection Tests
+                    </h4>
+                    <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">Port Check:</span>
+                            <span className={enablePortCheck ? 'text-green-600' : 'text-gray-400'}>
+                {enablePortCheck ? '✓ Enabled' : '○ Disabled'}
+              </span>
                         </div>
-
-                        {/* Pre-Connection Tests Checkboxes */}
-                        <div className="space-y-2 mb-3">
-                            <div className="text-small font-medium">Pre-Connection Tests:</div>
-
-                            {/* Port Check */}
-                            <div className="form-group">
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enablePortCheck}
-                                        onChange={(e) => onEnablePortCheckChange(e.target.checked)}
-                                        className="rounded border-gray-300"
-                                    />
-                                    <span className="text-small font-medium">Enable port connectivity test</span>
-                                </label>
-                                <div className="text-xs text-muted mt-1 ml-6">
-                                    {enablePortCheck
-                                        ? 'Tests if the server is reachable at the specified URL and port'
-                                        : 'Skip port test - connection may fail without clear error message'
-                                    }
-                                </div>
-                            </div>
-
-                            {/* CORS Check */}
-                            <div className="form-group">
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enableCorsCheck}
-                                        onChange={(e) => onEnableCorsCheckChange(e.target.checked)}
-                                        className="rounded border-gray-300"
-                                    />
-                                    <span className="text-small font-medium">Enable CORS configuration test</span>
-                                </label>
-                                <div className="text-xs text-muted mt-1 ml-6">
-                                    {enableCorsCheck
-                                        ? 'Verifies CORS headers allow requests from this origin'
-                                        : 'Skip CORS test - may result in unclear CORS errors'
-                                    }
-                                </div>
-                            </div>
-
-                            {/* Health Check */}
-                            <div className="form-group">
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={enableHealthCheck}
-                                        onChange={(e) => onEnableHealthCheckChange(e.target.checked)}
-                                        className="rounded border-gray-300"
-                                    />
-                                    <span className="text-small font-medium">Enable health endpoint test (/health)</span>
-                                </label>
-                                <div className="text-xs text-muted mt-1 ml-6">
-                                    {enableHealthCheck
-                                        ? 'Tests if /health endpoint responds correctly'
-                                        : 'Skip health test - some servers don\'t provide /health endpoint'
-                                    }
-                                </div>
-                            </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">CORS Check:</span>
+                            <span className={enableCorsCheck ? 'text-green-600' : 'text-gray-400'}>
+                {enableCorsCheck ? '✓ Enabled' : '○ Disabled'}
+              </span>
                         </div>
-
-                        {/* MCP Endpoint Path Configuration */}
-                        <div className="form-group">
-                            <label className="text-small font-medium mb-2 block">MCP Protocol Endpoint Configuration</label>
-
-                            <div className="mb-3">
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={endpointSameAsBase}
-                                        onChange={(e) => {
-                                            onEndpointSameAsBaseChange(e.target.checked);
-                                            if (e.target.checked) {
-                                                onMcpEndpointPathChange('');
-                                            } else {
-                                                onMcpEndpointPathChange('/api/mcp');
-                                            }
-                                        }}
-                                        className="rounded border-gray-300"
-                                    />
-                                    <span className="text-small">MCP endpoint is the same as Server Base URL</span>
-                                </label>
-                                <div className="text-xs text-muted mt-1">
-                                    Check this if your MCP server URL is complete (e.g., https://api.githubcopilot.com/mcp)
-                                </div>
-                            </div>
-
-                            {!endpointSameAsBase && (
-                                <>
-                                    <label htmlFor="mcpEndpointPath" className="text-small font-medium mb-1 block">MCP Protocol Endpoint Path</label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            id="mcpEndpointPath"
-                                            value={mcpEndpointPath}
-                                            onChange={(e) => onMcpEndpointPathChange(e.target.value)}
-                                            placeholder="/api/mcp"
-                                            className="w-full"
-                                        />
-                                        {mcpEndpointPath && (
-                                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                                                {isValidPath(mcpEndpointPath) ? (
-                                                    <CheckCircle className="w-3 h-3 text-green-500" />
-                                                ) : (
-                                                    <AlertCircle className="w-3 h-3 text-red-500" />
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="text-small text-muted mt-1">
-                                        Path to append to the base URL (must start with /)
-                                    </div>
-                                </>
-                            )}
-
-                            {/* URL Preview */}
-                            <div className="text-small text-muted mt-3">
-                                <div className="font-medium">Complete MCP URL:</div>
-                                <div className="font-mono text-xs bg-gray-50 p-2 rounded border mt-1 break-all">
-                                    {getFullMcpUrl() || 'Enter Server Base URL first'}
-                                </div>
-                            </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-600">Health Check:</span>
+                            <span className={enableHealthCheck ? 'text-green-600' : 'text-gray-400'}>
+                {enableHealthCheck ? '✓ Enabled' : '○ Disabled'}
+              </span>
                         </div>
-                    </div>
-
-                    {/* OAuth Configuration */}
-                    <OAuthConfiguration
-                        config={oauthConfig}
-                        onConfigChange={onOauthConfigChange}
-                        serverUrl={getFullMcpUrl()}
-                        disabled={loading || connected}
-                        onLogEntry={onLogEntry}
-                        tokenManager={tokenManager}
-                        hideDiscovery={true}
-                    />
-
-                    {/* OpenAI Configuration */}
-                    <div className="card">
-                        <h3 className="text-small font-medium mb-3">OpenAI Configuration</h3>
-
-                        <ModelSelector
-                            selectedModel={selectedModel}
-                            onModelChange={onSelectedModelChange}
-                            disabled={loading || connected}
-                        />
-
-                        <div className="form-group">
-                            <label htmlFor="openaiKey">OpenAI API Key</label>
-                            <div className="relative">
-                                <input
-                                    type={showOpenAIKey ? "text" : "password"}
-                                    id="openaiKey"
-                                    value={openaiApiKey}
-                                    onChange={(e) => onOpenaiApiKeyChange(e.target.value)}
-                                    placeholder="sk-..."
-                                    className="w-full pr-8"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowOpenAIKey(!showOpenAIKey)}
-                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted"
-                                >
-                                    {showOpenAIKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                </button>
-                            </div>
-                            {openaiApiKey && !isValidOpenAIKey(openaiApiKey) && (
-                                <div className="text-small text-red-500 mt-1">
-                                    Invalid API key format
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Connection Actions */}
-                    <div className="flex space-x-2">
-                        {connected ? (
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={() => {
-                                        setConnectionError(null);
-                                        if (oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce')) {
-                                            onDisconnect(true);
-                                        } else {
-                                            onDisconnect(false);
-                                        }
-                                    }}
-                                    className="btn btn-outline"
-                                >
-                                    {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Logout' : 'Disconnect'}
-                                </button>
-
-                                {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') && (
-                                    <button
-                                        onClick={() => {
-                                            setConnectionError(null);
-                                            onDisconnect(false);
-                                        }}
-                                        className="btn btn-outline"
-                                        title="Disconnect without logging out from identity provider"
-                                    >
-                                        Local Disconnect
-                                    </button>
-                                )}
-                            </div>
-                        ) : (
-                            <button
-                                onClick={async () => {
-                                    setConnectionError(null);
-                                    setTestResults(null);
-                                    try {
-                                        // Listen for test results from onLogEntry
-                                        const originalOnLogEntry = onLogEntry;
-                                        if (originalOnLogEntry) {
-                                            const wrappedLogEntry = (entry: any) => {
-                                                originalOnLogEntry(entry);
-                                                if (entry.operation === 'pre-connection-tests' && entry.response) {
-                                                    setTestResults(entry.response);
-                                                    setShowTestResults(true);
-                                                }
-                                            };
-                                            // Temporarily replace onLogEntry
-                                            const temp = onLogEntry;
-                                            (window as any)._tempLogEntry = wrappedLogEntry;
-                                        }
-                                        await onConnect();
-                                    } catch (error) {
-                                        console.error('Connection failed:', error);
-                                        setConnectionError(error);
-                                    }
-                                }}
-                                disabled={loading || !canConnect()}
-                                className="btn"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                        {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Logging in...' : 'Connecting...'}
-                                    </>
-                                ) : (
-                                    oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Login' : 'Connect'
-                                )}
-                            </button>
-                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Right Column - OAuth Discovery */}
-            <div className="w-1/2 border-l overflow-y-auto overflow-x-hidden p-4" style={{ paddingBottom: '60px' }}>
-                <div className="space-y-4">
-                    <h2 className="text-small font-medium">OAuth Discovery</h2>
+            {/* Connection Actions */}
+            <div className="card">
+                <h3 className="text-sm font-medium mb-3">Connection</h3>
 
-                    {oauthConfig.enabled ? (
-                        <div className="card">
-                            <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-small font-medium">OAuth Discovery</h3>
+                {connected ? (
+                    <div className="space-y-3">
+                        <div className="p-3 bg-green-50 border border-green-200 rounded">
+                            <div className="flex items-center text-sm text-green-800">
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Successfully connected to MCP server
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={() => {
+                                    if (oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce')) {
+                                        onDisconnect(true);
+                                    } else {
+                                        onDisconnect(false);
+                                    }
+                                }}
+                                className="btn btn-outline flex-1"
+                            >
+                                {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Logout' : 'Disconnect'}
+                            </button>
+
+                            {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') && (
                                 <button
-                                    onClick={discoverOAuthEndpoints}
-                                    disabled={loading || isDiscovering || !getFullMcpUrl() || !oauthConfig.clientId || ((oauthConfig.flow === 'client_credentials' || oauthConfig.flow === 'authorization_code') && !oauthConfig.clientSecret)}
-                                    className="btn-outline btn-small"
-                                    title={(!oauthConfig.clientId || ((oauthConfig.flow === 'client_credentials' || oauthConfig.flow === 'authorization_code') && !oauthConfig.clientSecret)) ? "Client ID and Secret required for discovery" : "Start OAuth endpoint discovery"}
+                                    onClick={() => onDisconnect(false)}
+                                    className="btn btn-outline flex-1"
+                                    title="Disconnect without logging out from identity provider"
                                 >
-                                    {isDiscovering ? (
-                                        <>
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                            Discovering...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Play className="w-3 h-3" />
-                                            Discover
-                                        </>
-                                    )}
+                                    Local Disconnect
                                 </button>
-                            </div>
-
-                            <div className="discovery-steps-container space-y-3">
-                                {discoverySteps.map((step) => (
-                                    <div key={step.id} className="border rounded p-3">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="flex-shrink-0">
-                                                {getStepIcon(step)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium">{step.name}</div>
-                                                {step.url && (
-                                                    <div className="text-xs text-muted font-mono break-all">{step.url}</div>
-                                                )}
-                                                {step.status === 'success' && step.data && (
-                                                    <div className="mt-2 text-xs">
-                                                        {step.id === 'mcp-endpoint' && (
-                                                            <div>
-                                                                {step.data.wwwAuthenticate && (
-                                                                    <div className="mb-1">
-                                                                        <span className="font-medium">WWW-Authenticate:</span> Found
-                                                                    </div>
-                                                                )}
-                                                                <div className="break-all">
-                                                                    <span className="font-medium">Resource Metadata URL:</span> {step.data.resourceMetadata}
-                                                                </div>
-                                                                {step.data.note && (
-                                                                    <div className="text-yellow-600 mt-1">{step.data.note}</div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {step.id === 'resource' && (
-                                                            <div>
-                                                                <div className="mb-1 break-all">
-                                                                    <span className="font-medium">Final URL:</span> {step.url}
-                                                                </div>
-                                                                <div className="break-all">Authorization Server: {step.data.authorization_servers?.[0]}</div>
-                                                                <div className="break-all">Scopes: {step.data.scopes_supported?.join(', ') || 'none'}</div>
-                                                            </div>
-                                                        )}
-                                                        {step.id === 'authserver' && (
-                                                            <div className="space-y-1">
-                                                                {step.data.authorization_endpoint && (
-                                                                    <div className="break-all">Auth URL: {step.data.authorization_endpoint}</div>
-                                                                )}
-                                                                {step.data.token_endpoint && (
-                                                                    <div className="break-all">Token URL: {step.data.token_endpoint}</div>
-                                                                )}
-                                                                {step.data.end_session_endpoint && (
-                                                                    <div className="break-all">Logout URL: {step.data.end_session_endpoint}</div>
-                                                                )}
-                                                                {step.data.issuer && (
-                                                                    <div className="break-all">Issuer: {step.data.issuer}</div>
-                                                                )}
-                                                                {step.data.scopes_supported && (
-                                                                    <div className="break-all">Supported Scopes: {step.data.scopes_supported.join(', ')}</div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {step.status === 'error' && step.error && (
-                                                    <div className="mt-1 text-xs text-red-600 break-words">{step.error}</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {discoverySteps.length === 0 && (
-                                    <div className="text-center text-muted py-4">
-                                        <div className="text-sm">Click "Discover" to start OAuth endpoint discovery</div>
-                                        <div className="text-xs mt-1">
-                                            This will query your MCP server for resource metadata, then discover IdP configuration
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="card">
-                            <div className="text-center text-muted py-8">
-                                <div className="text-sm">Enable OAuth to use discovery</div>
-                                <div className="text-xs mt-1">Configure OAuth in the left panel first</div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Additional Information Cards */}
-                    <div className="card">
-                        <div className="text-small font-medium mb-2">Setup Instructions</div>
-                        <ol className="text-small text-muted space-y-1 list-decimal list-inside">
-                            <li>Configure your Server Base URL</li>
-                            <li>Check "same as Server Base URL" if your MCP URL is complete, or set the endpoint path</li>
-                            <li>Enable/disable pre-connection tests as needed</li>
-                            <li>Start your MCP server if using a local server</li>
-                            <li>Configure OAuth if your server requires authentication</li>
-                            <li>For Authorization Code flow: Use the "Discover" button to find endpoints automatically</li>
-                            <li>Select your preferred OpenAI model</li>
-                            <li>Get your OpenAI API key from platform.openai.com</li>
-                            <li>Click {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Login' : 'Connect'}</li>
-                            <li>View pre-connection test results in the popup</li>
-                        </ol>
-                    </div>
-
-                    <div className="card">
-                        <div className="text-small font-medium mb-2">Pre-Connection Tests</div>
-                        <div className="text-small text-muted space-y-1">
-                            <div>• <strong>Port Test:</strong> Verifies the server is reachable at the specified URL/port</div>
-                            <div>• <strong>CORS Test:</strong> Checks if server allows cross-origin requests from this client</div>
-                            <div>• <strong>Health Test:</strong> Tests if /health endpoint responds (disable if not available)</div>
-                            <div>• All tests run before MCP connection attempt</div>
-                            <div>• Results shown in popup with timing information</div>
-                            <div>• Disable tests if they cause false errors with your server</div>
+                            )}
                         </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="space-y-3">
+                        {!canConnect() && (
+                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                                <div className="text-xs text-yellow-800">
+                                    <strong>Configuration incomplete:</strong>
+                                    <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                                        {!isValidUrl(serverBaseUrl) && <li>Valid MCP server URL required</li>}
+                                        {!isValidOpenAIKey(openaiApiKey) && <li>Valid OpenAI API key required</li>}
+                                        {oauthConfig.enabled && !oauthConfig.clientId && <li>OAuth Client ID required</li>}
+                                        {oauthConfig.enabled && oauthConfig.flow === 'client_credentials' && !oauthConfig.clientSecret && <li>OAuth Client Secret required</li>}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={onConnect}
+                            disabled={loading || !canConnect()}
+                            className="btn w-full flex items-center justify-center"
+                        >
+                            {loading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                    {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Logging in...' : 'Connecting...'}
+                                </>
+                            ) : (
+                                <>
+                                    <Play className="w-4 h-4 mr-2" />
+                                    {oauthConfig.enabled && (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') ? 'Login' : 'Connect'}
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
 };
+
+// Main ConfigTab Component with Sub-tabs
+export default function ConfigTab({
+                                      serverBaseUrl,
+                                      onServerBaseUrlChange,
+                                      mcpEndpointPath,
+                                      onMcpEndpointPathChange,
+                                      endpointSameAsBase,
+                                      onEndpointSameAsBaseChange,
+                                      openaiApiKey,
+                                      onOpenaiApiKeyChange,
+                                      selectedModel,
+                                      onSelectedModelChange,
+                                      oauthToken,
+                                      onOauthTokenChange,
+                                      oauthConfig,
+                                      onOauthConfigChange,
+                                      connected,
+                                      loading,
+                                      capabilities,
+                                      onConnect,
+                                      onDisconnect,
+                                      tokenManager,
+                                      enablePortCheck,
+                                      onEnablePortCheckChange,
+                                      enableCorsCheck,
+                                      onEnableCorsCheckChange,
+                                      enableHealthCheck,
+                                      onEnableHealthCheckChange,
+                                      onLogEntry
+                                  }) {
+    const [activeSubTab, setActiveSubTab] = useState('mcp-server');
+
+    const subTabs = [
+        { id: 'mcp-server', label: 'MCP Server', icon: Server },
+        { id: 'oauth', label: 'OAuth', icon: Shield },
+        { id: 'openai', label: 'OpenAI', icon: Cpu },
+        { id: 'tests', label: 'Pre-connect Tests', icon: TestTube },
+        { id: 'connect', label: 'Connect', icon: Play }
+    ];
+
+    return (
+        <div className="h-full flex flex-col">
+            {/* Sub-tabs Navigation */}
+            <div className="flex border-b border-gray-200 bg-gray-50 px-4">
+                {subTabs.map(({ id, label, icon: Icon }) => (
+                    <button
+                        key={id}
+                        onClick={() => setActiveSubTab(id)}
+                        className={`
+              flex items-center space-x-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors
+              ${activeSubTab === id
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                        }
+            `}
+                    >
+                        <Icon className="w-4 h-4" />
+                        <span>{label}</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Sub-tab Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-3xl mx-auto">
+                    {activeSubTab === 'mcp-server' && (
+                        <MCPServerTab
+                            serverBaseUrl={serverBaseUrl}
+                            onServerBaseUrlChange={onServerBaseUrlChange}
+                            mcpEndpointPath={mcpEndpointPath}
+                            onMcpEndpointPathChange={onMcpEndpointPathChange}
+                            endpointSameAsBase={endpointSameAsBase}
+                            onEndpointSameAsBaseChange={onEndpointSameAsBaseChange}
+                            disabled={loading || connected}
+                        />
+                    )}
+
+                    {activeSubTab === 'oauth' && (
+                        <OAuthTab
+                            oauthConfig={oauthConfig}
+                            onOauthConfigChange={onOauthConfigChange}
+                            serverBaseUrl={serverBaseUrl}
+                            mcpEndpointPath={mcpEndpointPath}
+                            endpointSameAsBase={endpointSameAsBase}
+                            disabled={loading || connected}
+                            tokenManager={tokenManager}
+                        />
+                    )}
+
+                    {activeSubTab === 'openai' && (
+                        <OpenAIConfigTab
+                            openaiApiKey={openaiApiKey}
+                            onOpenaiApiKeyChange={onOpenaiApiKeyChange}
+                            selectedModel={selectedModel}
+                            onSelectedModelChange={onSelectedModelChange}
+                            disabled={loading || connected}
+                        />
+                    )}
+
+                    {activeSubTab === 'tests' && (
+                        <PreConnectionTestsTab
+                            enablePortCheck={enablePortCheck}
+                            onEnablePortCheckChange={onEnablePortCheckChange}
+                            enableCorsCheck={enableCorsCheck}
+                            onEnableCorsCheckChange={onEnableCorsCheckChange}
+                            enableHealthCheck={enableHealthCheck}
+                            onEnableHealthCheckChange={onEnableHealthCheckChange}
+                            disabled={loading || connected}
+                        />
+                    )}
+
+                    {activeSubTab === 'connect' && (
+                        <ConnectTab
+                            serverBaseUrl={serverBaseUrl}
+                            mcpEndpointPath={mcpEndpointPath}
+                            endpointSameAsBase={endpointSameAsBase}
+                            oauthConfig={oauthConfig}
+                            selectedModel={selectedModel}
+                            openaiApiKey={openaiApiKey}
+                            enablePortCheck={enablePortCheck}
+                            enableCorsCheck={enableCorsCheck}
+                            enableHealthCheck={enableHealthCheck}
+                            connected={connected}
+                            loading={loading}
+                            onConnect={onConnect}
+                            onDisconnect={onDisconnect}
+                            tokenManager={tokenManager}
+                        />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export {ConfigTab};

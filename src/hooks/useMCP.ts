@@ -407,17 +407,21 @@ export const useMCP = () => {
         }
     }, []);
 
-    // Cleanup on unmount
+    // Cleanup on unmount ONLY - not on dependency changes
     useEffect(() => {
+        // This cleanup only runs when the component unmounts
         return () => {
+            console.log('useMCP cleanup on unmount');
             if (mcpClient) {
+                console.log('Disconnecting MCP client on unmount');
                 mcpClient.disconnect();
             }
             if (tokenManager) {
+                console.log('Clearing token on unmount');
                 tokenManager.clearToken();
             }
         };
-    }, [mcpClient, tokenManager]);
+    }, []); // CRITICAL: Empty dependency array so cleanup only runs on unmount
 
     const reloadCapabilities = useCallback(async () => {
         if (!mcpClient) {

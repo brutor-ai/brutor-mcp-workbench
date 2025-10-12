@@ -80,7 +80,7 @@ export class AuthCodeFlowManager {
 
   // Start the authorization flow
   async startAuthorizationFlow(): Promise<void> {
-    // FIXED: This class handles PKCE flow, not traditional authorization code flow
+    // This class handles PKCE flow, not traditional authorization code flow
     if (this.config.flow !== 'authorization_code_pkce') {
       throw new Error('This method is only for authorization code PKCE flow');
     }

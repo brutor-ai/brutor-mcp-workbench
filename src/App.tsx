@@ -274,7 +274,7 @@ const MainApp: React.FC = () => {
         }
     }, [connect, mcpServerUrl, mcpEndpointPath, endpointSameAsBase, enablePortCheck, enableCorsCheck, enableHealthCheck, openaiApiKey, selectedModel, oauthConfig, addLogEntry, capabilities]);
 
-    // FIXED: Check if we're in an OAuth callback - ONLY RUN ONCE
+    // Check if we're in an OAuth callback - ONLY RUN ONCE
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const tabParam = urlParams.get('tab');
@@ -282,6 +282,13 @@ const MainApp: React.FC = () => {
         // Handle tab parameter changes
         if (tabParam === 'config' || tabParam === 'capabilities') {
             setActiveTab(tabParam as 'chat' | 'capabilities' | 'config');
+        }
+
+        // CRITICAL FIX: Check for OAuth error in URL first and clean it up
+        if (urlParams.has('error') && urlParams.get('error') === 'oauth_failed') {
+            console.log('OAuth error already processed, cleaning up URL');
+            window.history.replaceState({}, '', window.location.pathname + '?tab=config');
+            return; // Exit early, don't try to process again
         }
 
         // Handle OAuth callback processing
@@ -315,24 +322,27 @@ const MainApp: React.FC = () => {
                 .then(() => {
                     console.log('Connection completed after OAuth callback');
 
-                    // Clean up URL after successful connection
-                    window.history.replaceState({}, '', window.location.pathname + '?tab=config');
-
+                    // CRITICAL FIX: Use setTimeout to delay URL cleanup
+                    // This prevents triggering a re-render during the connection process
                     setTimeout(() => {
+                        // Clean up URL after successful connection
+                        window.history.replaceState({}, '', window.location.pathname + '?tab=config');
+
                         console.log('Checking post-connection auth state:', {
                             hasTokenManager: !!tokenManager,
                             isValid: tokenManager?.isTokenValid(),
                             tokenInfo: tokenManager?.getTokenInfo()
                         });
-                        // Reset processing flag after a delay
+
+                        // Reset processing flag after everything is settled
                         isProcessingOAuth.current = false;
-                    }, 1000);
+                    }, 2000); // Wait 2 seconds for state to fully settle
                 })
                 .catch((error) => {
                     console.error('Connection failed after OAuth callback:', error);
 
-                    // Clean up URL even on error
-                    window.history.replaceState({}, '', window.location.pathname + '?tab=config&error=oauth_failed');
+                    // Clean up URL to prevent re-processing the error
+                    window.history.replaceState({}, '', window.location.pathname + '?tab=config');
 
                     // Reset processing flag immediately on error
                     isProcessingOAuth.current = false;

@@ -16,6 +16,8 @@
 
 // Traditional Authorization Code Flow without PKCE (for GitHub OAuth Apps)
 import { OAuthConfig } from '../types';
+import { jwtDecode } from 'jwt-decode';
+
 
 export interface TokenInfo {
   access_token: string;
@@ -48,222 +50,336 @@ export class TraditionalAuthCodeFlowManager {
   }
 
   // Start the authorization flow
-  async startAuthorizationFlow(): Promise<void> {
-    if (this.config.flow !== 'authorization_code') {
-      throw new Error('This method is only for traditional authorization code flow');
-    }
-
-    if (!this.config.authEndpoint || !this.config.clientId) {
-      throw new Error('Authorization endpoint and client ID are required');
-    }
-
-    // Generate state for CSRF protection
-    const state = Math.random().toString(36).substring(2);
-    sessionStorage.setItem('oauth_state', state);
-
-    // Build authorization URL (no PKCE)
-    const authUrl = new URL(this.config.authEndpoint);
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: this.config.clientId,
-      redirect_uri: window.location.origin + '/callback',
-      scope: this.config.scope || 'repo user',
-      state: state
-    });
-
-    authUrl.search = params.toString();
-
-    if (this.onLogEntry) {
-      this.onLogEntry({
-        source: 'MCP',
-        type: 'connection',
-        status: 'pending',
-        operation: 'oauth-auth-start',
-        details: {
-          flow: 'authorization_code',
-          authEndpoint: this.config.authEndpoint,
-          clientId: this.config.clientId,
-          scope: this.config.scope,
-          pkce: false
+    async startAuthorizationFlow(): Promise<void> {
+        if (this.config.flow !== 'authorization_code') {
+            throw new Error('This method is only for traditional authorization code flow');
         }
-      });
-    }
 
-    // Redirect to authorization server
-    window.location.href = authUrl.toString();
-  }
+        if (!this.config.authEndpoint || !this.config.clientId || !this.config.clientSecret) {
+            throw new Error('Authorization endpoint, client ID, and client secret are required');
+        }
+
+        // Generate and store state
+        const state = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        sessionStorage.setItem('oauth_state', state);
+
+        console.log('Starting traditional auth code flow with state:', state);
+
+        // Build authorization URL
+        const authUrl = new URL(this.config.authEndpoint);
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: this.config.clientId,
+            redirect_uri: window.location.origin + '/callback',
+            scope: this.config.scope || 'openid profile',
+            state: state
+        });
+
+        authUrl.search = params.toString();
+
+        if (this.onLogEntry) {
+            this.onLogEntry({
+                source: 'MCP',
+                type: 'connection',
+                status: 'pending',
+                operation: 'oauth-auth-start',
+                details: {
+                    flow: 'authorization_code',
+                    authEndpoint: this.config.authEndpoint,
+                    clientId: this.config.clientId,
+                    scope: this.config.scope,
+                    state: state
+                }
+            });
+        }
+
+        console.log('Redirecting to:', authUrl.toString());
+
+        // Redirect to authorization server
+        window.location.href = authUrl.toString();
+    }
 
   // Handle the callback from authorization server
-  async handleAuthorizationCallback(): Promise<TokenInfo> {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
-    const error = urlParams.get('error');
+    async handleAuthorizationCallback(): Promise<TokenInfo> {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const error = urlParams.get('error');
 
-    if (error) {
-      const errorDescription = urlParams.get('error_description') || error;
-      throw new Error(`Authorization failed: ${errorDescription}`);
-    }
+        console.log('🔵 Handling traditional auth code callback:', {
+            hasCode: !!code,
+            hasState: !!state,
+            hasError: !!error,
+            state: state,
+            storedState: sessionStorage.getItem('oauth_state')
+        });
 
-    if (!code) {
-      throw new Error('No authorization code received');
-    }
-
-    // Verify state parameter
-    const storedState = sessionStorage.getItem('oauth_state');
-    if (!state || state !== storedState) {
-      throw new Error('Invalid state parameter');
-    }
-
-    // Exchange code for tokens (traditional flow)
-    const tokenInfo = await this.exchangeCodeForTokens(code);
-
-    // Clean up session storage
-    sessionStorage.removeItem('oauth_state');
-
-    // Store token info
-    this.currentToken = tokenInfo;
-    this.tokenExpiryTimestamp = Date.now() + (tokenInfo.expires_in * 1000);
-
-    // Fetch user info for GitHub (no JWT decoding needed)
-    try {
-      await this.fetchUserInfo();
-    } catch (error) {
-      console.warn('Failed to fetch user info:', error);
-      // Continue even if user info fails
-    }
-
-    console.log('handleAuthorizationCallback completed:', {
-      tokenStored: !!this.currentToken,
-      userInfoFetched: !!this.userInfo,
-      isAuthenticated: this.isAuthenticated(),
-    });
-
-    if (this.onLogEntry) {
-      this.onLogEntry({
-        source: 'MCP',
-        type: 'connection',
-        status: 'success',
-        operation: 'oauth-auth-complete',
-        details: {
-          flow: 'authorization_code',
-          scope: tokenInfo.scope,
-        },
-        response: {
-          hasToken: true,
-          tokenType: tokenInfo.token_type,
-          userLogin: this.userInfo?.login,
-          permissions: this.getUserPermissions()
+        if (error) {
+            const errorDescription = urlParams.get('error_description') || error;
+            throw new Error(`Authorization failed: ${errorDescription}`);
         }
-      });
-    }
 
-    return tokenInfo;
-  }
+        if (!code) {
+            throw new Error('No authorization code received');
+        }
 
-  private async exchangeCodeForTokens(code: string): Promise<TokenInfo> {
-    if (!this.config.tokenEndpoint || !this.config.clientSecret) {
-      throw new Error('Token endpoint and client secret are required for traditional flow');
-    }
+        // Get stored state
+        const storedState = sessionStorage.getItem('oauth_state');
 
-    // GitHub requires specific headers for CORS requests
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept': 'application/json',
-      'User-Agent': 'MCP-Web-Client/1.0'
-    };
+        // GitHub doesn't always send back the state parameter, so we need to handle that
+        if (state) {
+            if (!storedState) {
+                console.warn('⚠️ No stored state found, but state parameter was received. Proceeding anyway for GitHub compatibility.');
+            } else if (state !== storedState) {
+                console.error('❌ State mismatch:', { received: state, stored: storedState });
+                throw new Error('Invalid state parameter - possible CSRF attack or session expired');
+            } else {
+                console.log('✅ State parameter validated successfully');
+            }
+        } else {
+            console.warn('⚠️ No state parameter in callback - this is common with GitHub OAuth');
+        }
 
-    // Add CORS headers for GitHub
-    if (this.config.tokenEndpoint.includes('github.com')) {
-      headers['Origin'] = window.location.origin;
-    }
-
-    const requestBody = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: this.config.clientId,
-      client_secret: this.config.clientSecret,
-      code: code,
-      redirect_uri: window.location.origin + '/callback'
-    });
-
-    console.log('Exchanging code for tokens:', {
-      endpoint: this.config.tokenEndpoint,
-      clientId: this.config.clientId,
-      redirectUri: window.location.origin + '/callback',
-      headers
-    });
-
-    try {
-      const response = await fetch(this.config.tokenEndpoint, {
-        method: 'POST',
-        headers,
-        body: requestBody,
-        mode: 'cors', // Explicitly set CORS mode
-        credentials: 'omit' // Don't send cookies
-      });
-
-      console.log('Token exchange response:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Token exchange failed - Response body:', errorText);
-        
-        let errorDetail = errorText;
         try {
-          const errorJson = JSON.parse(errorText);
-          errorDetail = errorJson.error_description || errorJson.error || errorText;
-        } catch {
-          // Use raw text if not JSON
+            console.log('🔄 Starting token exchange...');
+
+            // Exchange code for tokens
+            const tokenInfo = await this.exchangeCodeForTokens(code);
+
+            console.log('✅ Token exchange completed, storing token info');
+
+            // Clean up session storage
+            sessionStorage.removeItem('oauth_state');
+
+            // Store token info
+            this.currentToken = tokenInfo;
+            this.tokenExpiryTimestamp = Date.now() + (tokenInfo.expires_in * 1000);
+
+            console.log('✅ Token stored in manager:', {
+                hasCurrentToken: !!this.currentToken,
+                tokenLength: this.currentToken?.access_token?.length,
+                expiryTimestamp: this.tokenExpiryTimestamp,
+                expiresInSeconds: tokenInfo.expires_in
+            });
+
+            console.log('✅ handleAuthorizationCallback completed:', {
+                tokenStored: !!this.currentToken,
+                userInfoFetched: !!this.userInfo,
+                isAuthenticated: this.isAuthenticated(),
+            });
+
+            if (this.onLogEntry) {
+                this.onLogEntry({
+                    source: 'MCP',
+                    type: 'connection',
+                    status: 'success',
+                    operation: 'oauth-auth-complete',
+                    details: {
+                        flow: 'authorization_code',
+                        scope: tokenInfo.scope,
+                    },
+                    response: {
+                        hasToken: true,
+                        tokenType: tokenInfo.token_type,
+                        userRoles: this.getUserRoles(),
+                        permissions: this.getUserPermissions()
+                    }
+                });
+            }
+
+            return tokenInfo;
+        } catch (error) {
+            console.error('❌ Token exchange failed:', error);
+            // Clean up session storage on error
+            sessionStorage.removeItem('oauth_state');
+            throw error;
         }
-        throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorDetail}`);
-      }
-
-      const responseText = await response.text();
-      console.log('Raw token response:', responseText);
-
-      let tokenData: TokenInfo;
-      try {
-        tokenData = JSON.parse(responseText);
-      } catch (parseError) {
-        // GitHub might return URL-encoded data instead of JSON
-        console.log('Response is not JSON, trying URL-encoded parsing...');
-        const params = new URLSearchParams(responseText);
-        tokenData = {
-          access_token: params.get('access_token') || '',
-          token_type: params.get('token_type') || 'bearer',
-          expires_in: parseInt(params.get('expires_in') || '3600'),
-          scope: params.get('scope') || undefined,
-          refresh_token: params.get('refresh_token') || undefined
-        };
-      }
-      
-      console.log('Parsed token data:', {
-        hasAccessToken: !!tokenData.access_token,
-        tokenType: tokenData.token_type,
-        scope: tokenData.scope,
-        expiresIn: tokenData.expires_in
-      });
-
-      if (!tokenData.access_token) {
-        throw new Error('No access token received from GitHub');
-      }
-
-      return tokenData;
-
-    } catch (error) {
-      console.error('Token exchange request failed:', error);
-      
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        throw new Error('Network error: Unable to connect to GitHub. This might be a CORS issue or network connectivity problem.');
-      }
-      
-      throw error;
     }
-  }
+
+    private async exchangeCodeForTokens(code: string): Promise<TokenInfo> {
+        if (!this.config.tokenEndpoint) {
+            throw new Error('Token endpoint is required');
+        }
+
+        console.log('Exchanging code for tokens:', {
+            endpoint: this.config.tokenEndpoint,
+            clientId: this.config.clientId,
+            redirectUri: window.location.origin + '/callback',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json',
+                'Origin': window.location.origin,
+                'User-Agent': 'MCP-Web-Client/1.0'
+            }
+        });
+
+        try {
+            const requestBody = new URLSearchParams({
+                grant_type: 'authorization_code',
+                client_id: this.config.clientId,
+                client_secret: this.config.clientSecret || '',
+                code: code,
+                redirect_uri: window.location.origin + '/callback'
+            });
+
+            console.log('Making token exchange request to:', this.config.tokenEndpoint);
+            console.log('Request body:', requestBody.toString());
+
+            const response = await fetch(this.config.tokenEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json'
+                },
+                body: requestBody
+            });
+
+            console.log('Token exchange response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok,
+                contentType: response.headers.get('content-type')
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Token exchange failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+
+                let errorDetail = errorText;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorDetail = errorJson.error_description || errorJson.error || errorJson.message || errorText;
+                } catch {
+                    // Use raw text if not JSON
+                }
+
+                throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorDetail}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            let tokenData: any;
+
+            // GitHub sometimes returns form-encoded responses instead of JSON
+            if (contentType?.includes('application/x-www-form-urlencoded')) {
+                console.log('Parsing form-encoded token response from GitHub...');
+                const text = await response.text();
+                console.log('Raw response text:', text);
+
+                const params = new URLSearchParams(text);
+                tokenData = {
+                    access_token: params.get('access_token'),
+                    token_type: params.get('token_type') || 'bearer',
+                    expires_in: parseInt(params.get('expires_in') || '3600'),
+                    scope: params.get('scope'),
+                    refresh_token: params.get('refresh_token')
+                };
+
+                console.log('Parsed token data:', {
+                    hasAccessToken: !!tokenData.access_token,
+                    tokenType: tokenData.token_type,
+                    expiresIn: tokenData.expires_in,
+                    scope: tokenData.scope,
+                    hasRefreshToken: !!tokenData.refresh_token
+                });
+            } else {
+                // Standard JSON response
+                const text = await response.text();
+                console.log('Raw JSON response:', text);
+
+                tokenData = JSON.parse(text);
+                console.log('Parsed JSON token data:', {
+                    hasAccessToken: !!tokenData.access_token,
+                    tokenType: tokenData.token_type,
+                    expiresIn: tokenData.expires_in,
+                    scope: tokenData.scope,
+                    hasRefreshToken: !!tokenData.refresh_token
+                });
+            }
+
+            // Validate we got an access token
+            if (!tokenData.access_token) {
+                console.error('No access token in response:', tokenData);
+                throw new Error('No access token received from authorization server. Response: ' + JSON.stringify(tokenData));
+            }
+
+            console.log('✅ Token received successfully:', {
+                tokenLength: tokenData.access_token.length,
+                tokenType: tokenData.token_type,
+                expiresIn: tokenData.expires_in
+            });
+
+            // GitHub tokens might not have expires_in, default to 1 hour
+            if (!tokenData.expires_in) {
+                console.warn('No expires_in provided, defaulting to 3600 seconds (1 hour)');
+                tokenData.expires_in = 3600;
+            }
+
+            // Try to decode user info from access token
+            try {
+                this.userInfo = jwtDecode<UserInfo>(tokenData.access_token);
+                console.log('✅ User info decoded from token:', {
+                    sub: this.userInfo.sub,
+                    email: this.userInfo.email,
+                    name: this.userInfo.name
+                });
+            } catch (e) {
+                console.warn('⚠️ Could not decode user info from access token (normal for GitHub):', e);
+
+                // For GitHub, create a minimal user info object
+                this.userInfo = {
+                    sub: 'github-user',
+                    name: 'GitHub User',
+                    preferred_username: 'github-user'
+                };
+
+                console.log('Created placeholder user info:', this.userInfo);
+            }
+
+            if (this.onLogEntry) {
+                this.onLogEntry({
+                    source: 'MCP',
+                    type: 'connection',
+                    status: 'success',
+                    operation: 'oauth-token-exchange',
+                    details: {
+                        flow: 'authorization_code',
+                        tokenType: tokenData.token_type,
+                        hasRefreshToken: !!tokenData.refresh_token,
+                        scope: tokenData.scope
+                    }
+                });
+            }
+
+            console.log('✅ Token exchange completed successfully, returning token data');
+            return tokenData;
+
+        } catch (error) {
+            console.error('❌ Token exchange request failed:', error);
+            console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+
+            if (this.onLogEntry) {
+                this.onLogEntry({
+                    source: 'MCP',
+                    type: 'connection',
+                    status: 'error',
+                    operation: 'oauth-token-exchange',
+                    details: {
+                        flow: 'authorization_code',
+                        tokenEndpoint: this.config.tokenEndpoint
+                    },
+                    response: {
+                        error: error instanceof Error ? error.message : 'Unknown error'
+                    }
+                });
+            }
+
+            throw error;
+        }
+    }
 
   private async fetchUserInfo(): Promise<void> {
     if (!this.currentToken) {
