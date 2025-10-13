@@ -16,7 +16,7 @@
 
 import React, { useState } from 'react';
 import { X, FileText, Play } from 'lucide-react';
-import { MCPResource } from '../types';
+import { MCPResource } from '../../types';
 
 interface ResourceSelectorProps {
   resources: MCPResource[];

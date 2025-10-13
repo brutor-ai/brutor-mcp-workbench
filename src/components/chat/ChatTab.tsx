@@ -15,14 +15,14 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { BrutorLogo } from './BrutorLogo';
+import { BrutorLogo } from '../BrutorLogo.tsx';
 import { Send, Loader2, Copy, Check, FileText, Lightbulb, ChevronDown, ChevronUp } from 'lucide-react';
-import { ChatMessage, MCPCapabilities, MCPResource, MCPPrompt, ChatAttachment, MCPResourceTemplate } from '../types';
-import { ResourceSelector } from './ResourceSelector';
-import { PromptSelector } from './PromptSelector';
-import { PdfUploader } from './PdfUploader';
-import { AttachmentPreview } from './AttachmentPreview';
-import { ResourceTemplateSelector } from './ResourceTemplateSelector';
+import { ChatMessage, MCPCapabilities, MCPResource, MCPPrompt, ChatAttachment, MCPResourceTemplate } from '../../types';
+import { ResourceSelector } from './ResourceSelector.tsx';
+import { PromptSelector } from './PromptSelector.tsx';
+import { PdfUploader } from './PdfUploader.tsx';
+import { AttachmentPreview } from './AttachmentPreview.tsx';
+import { ResourceTemplateSelector } from './ResourceTemplateSelector.tsx';
 
 interface ChatTabProps {
   messages: ChatMessage[];
@@ -390,7 +390,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
           {!connected ? (
             <div className="text-center text-muted p-4">
               <div className="mb-2">Not connected to MCP server</div>
-              <div className="text-small text-muted">Go to Config tab to connect</div>
+              <div className="text-small text-muted">Go to "Configure & Connect" tab to connect first</div>
             </div>
           ) : displayMessages.length === 0 ? (
             <div className="text-center text-muted p-4">

@@ -16,7 +16,7 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Play } from 'lucide-react';
-import { MCPCapabilities, MCPResource, MCPPrompt, MCPResourceTemplate } from '../types';
+import { MCPCapabilities, MCPResource, MCPPrompt, MCPResourceTemplate } from '../../types';
 
 interface CapabilitiesListProps {
   capabilities: MCPCapabilities;

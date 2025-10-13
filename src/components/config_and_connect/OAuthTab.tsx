@@ -16,7 +16,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, CheckCircle, AlertCircle, User, LogOut, Loader2, Play, Server, Shield } from 'lucide-react';
-import { OAuthConfig } from '../types';
+import { OAuthConfig } from '../../types';
+import { ScopeErrorAlert } from './ScopeErrorAlert';
 
 export interface OAuthConfigProps {
     config: OAuthConfig;
@@ -37,19 +38,29 @@ interface DiscoveryStep {
     error?: string;
 }
 
-export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
-                                                                   config,
-                                                                   onConfigChange,
-                                                                   serverUrl,
-                                                                   disabled = false,
-                                                                   onLogEntry,
-                                                                   tokenManager,
-                                                                   hideDiscovery = false
-                                                               }) => {
+export const OAuthTab: React.FC<OAuthConfigProps> = ({
+                                                         config,
+                                                         onConfigChange,
+                                                         serverUrl,
+                                                         disabled = false,
+                                                         onLogEntry,
+                                                         tokenManager,
+                                                         hideDiscovery = false
+                                                     }) => {
     const [showClientSecret, setShowClientSecret] = useState(false);
     const [discoverySteps, setDiscoverySteps] = useState<DiscoveryStep[]>([]);
     const [isDiscovering, setIsDiscovering] = useState(false);
+    const [scopeError, setScopeError] = useState<string[] | null>(null);
     const lastDiscoveredUrl = useRef<string>('');
+
+    // Check for scope errors from URL on mount
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('invalid_scopes')) {
+            const scopes = urlParams.get('invalid_scopes')?.split(',') || [];
+            setScopeError(scopes.filter(s => s.trim()));
+        }
+    }, []);
 
     // Get token info and user info from token manager
     const tokenInfo = tokenManager?.getTokenInfo();
@@ -83,17 +94,13 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
         const newConfig = {
             ...config,
             flow,
-            // Keep existing client ID or leave empty
             clientId: config.clientId || '',
-            // Set reasonable default scopes
             scope: flow === 'client_credentials' ? 'openid' :
                 flow === 'authorization_code' ? 'openid profile email' :
                     'openid profile email',
-            // Traditional and client credentials flows need client secret
             clientSecret: (flow === 'authorization_code' || flow === 'client_credentials')
                 ? (config.clientSecret || '')
                 : undefined,
-            // Clear endpoints when changing flow to trigger rediscovery
             authEndpoint: undefined,
             tokenEndpoint: undefined,
             logoutEndpoint: undefined,
@@ -104,7 +111,7 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
 
     const handleLogout = () => {
         if (tokenManager) {
-            tokenManager.logout(false); // Local logout only
+            tokenManager.logout(false);
         }
     };
 
@@ -141,6 +148,7 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
 
         console.log('Starting OAuth discovery process...');
         setIsDiscovering(true);
+        setScopeError(null); // Clear any previous scope errors
 
         const mcpUrl = serverUrl.replace(/\/+$/, '');
 
@@ -398,7 +406,7 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
         const roles = tokenInfo?.roles || [];
 
         return (
-            <div className="card">
+            <div className="card mb-4">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-small font-medium">User Information</h3>
                     <button
@@ -415,8 +423,8 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                     <div className="flex items-center space-x-2">
                         <User className="w-4 h-4 text-blue-600" />
                         <span className="text-sm font-medium">
-              {userInfo?.preferred_username || userInfo?.login || userInfo?.email || 'Unknown User'}
-            </span>
+                            {userInfo?.preferred_username || userInfo?.login || userInfo?.email || 'Unknown User'}
+                        </span>
                     </div>
 
                     {userInfo?.email && (
@@ -428,12 +436,12 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                     <div className="mt-3">
                         <div className="text-xs font-medium text-gray-700 mb-1">Permissions:</div>
                         <div className="flex space-x-4 text-xs">
-              <span className={userPermissions.canRead ? 'status-connected' : 'text-muted'}>
-                Read: {userPermissions.canRead ? '[OK]' : '[ ]'}
-              </span>
+                            <span className={userPermissions.canRead ? 'status-connected' : 'text-muted'}>
+                                Read: {userPermissions.canRead ? '[OK]' : '[ ]'}
+                            </span>
                             <span className={userPermissions.canWrite ? 'status-connected' : 'text-muted'}>
-                Write: {userPermissions.canWrite ? '[OK]' : '[ ]'}
-              </span>
+                                Write: {userPermissions.canWrite ? '[OK]' : '[ ]'}
+                            </span>
                         </div>
                     </div>
 
@@ -443,8 +451,8 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                             <div className="flex flex-wrap gap-1">
                                 {roles.map(role => (
                                     <span key={role} className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                    {role}
-                  </span>
+                                        {role}
+                                    </span>
                                 ))}
                             </div>
                         </div>
@@ -495,22 +503,15 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                                 </>
                             ) : config.flow === 'authorization_code' ? (
                                 <>
-                                    <div>• Traditional flow with client secret - GitHub MCP Server uses this for example</div>
-                                    <div>• For confidential clients with client secret - often need to register app first</div>
+                                    <div>• Traditional flow with client secret</div>
+                                    <div>• For confidential clients</div>
                                     <div>• User redirected for authentication</div>
                                 </>
                             ) : (
                                 <>
-                                    <div className="text-green-600 font-medium">✓ Recommended for browser-based applications</div>
+                                    <div className="text-green-600 font-medium">✓ Recommended for browser apps</div>
                                     <div>• Most secure flow without client secret</div>
                                     <div>• Public client configuration</div>
-                                    <div className="text-blue-600 font-medium mt-2">📋 OAuth Server Setup Requirements:</div>
-                                    <div className="ml-3 space-y-0.5">
-                                        <div>1. Configure client as <strong>public client</strong></div>
-                                        <div>2. Add redirect URI: <code className="bg-gray-100 px-1 rounded text-xs">{window.location.origin}/callback</code></div>
-                                        <div>3. Enable CORS for origin: <code className="bg-gray-100 px-1 rounded text-xs">{window.location.origin}</code></div>
-                                        <div>4. Enable "Authorization Code Flow" with PKCE support</div>
-                                    </div>
                                 </>
                             )}
                         </div>
@@ -528,14 +529,6 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                             disabled={disabled}
                             className="w-full"
                         />
-                        <div className="text-small text-muted mt-1">
-                            {config.flow === 'authorization_code_pkce'
-                                ? 'Client ID from your OAuth provider (configured as public client)'
-                                : config.flow === 'authorization_code'
-                                    ? 'Client ID from your OAuth provider (confidential client with secret)'
-                                    : 'Client ID for service-to-service authentication (confidential client)'
-                            }
-                        </div>
                     </div>
 
                     {/* Client Secret - for client credentials and traditional auth code flow */}
@@ -560,12 +553,6 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                                 >
                                     {showClientSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                                 </button>
-                            </div>
-                            <div className="text-small text-muted mt-1">
-                                {config.flow === 'authorization_code'
-                                    ? 'Required for traditional OAuth flow - keep this secure and never expose in browser'
-                                    : 'Required for confidential client credentials flow - keep secure'
-                                }
                             </div>
                         </div>
                     )}
@@ -594,9 +581,6 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="text-small text-muted mt-1">
-                                URL where users are redirected for login - use Discovery button to auto-configure
-                            </div>
                         </div>
                     )}
 
@@ -622,9 +606,6 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                                     )}
                                 </div>
                             )}
-                        </div>
-                        <div className="text-small text-muted mt-1">
-                            Token exchange endpoint - use Discovery button to auto-configure
                         </div>
                     </div>
 
@@ -652,39 +633,6 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="text-small text-muted mt-1">
-                                Optional - For proper logout from identity provider. If not set, only local session will be cleared.
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Post-Logout Redirect URI - only for PKCE authorization code flow */}
-                    {config.flow === 'authorization_code_pkce' && (
-                        <div className="form-group">
-                            <label htmlFor="postLogoutRedirectUri">Post-Logout Redirect URI (Optional)</label>
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    id="postLogoutRedirectUri"
-                                    value={config.postLogoutRedirectUri || ''}
-                                    onChange={(e) => handleConfigUpdate('postLogoutRedirectUri', e.target.value)}
-                                    placeholder={window.location.origin}
-                                    disabled={disabled}
-                                    className="w-full"
-                                />
-                                {config.postLogoutRedirectUri && (
-                                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                                        {isValidUrl(config.postLogoutRedirectUri) ? (
-                                            <CheckCircle className="w-3 h-3 text-green-500" />
-                                        ) : (
-                                            <AlertCircle className="w-3 h-3 text-red-500" />
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="text-small text-muted mt-1">
-                                Where to redirect after logout. Defaults to current origin if not specified.
-                            </div>
                         </div>
                     )}
 
@@ -700,48 +648,32 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                             disabled={disabled}
                             className="w-full"
                         />
-                        <div className="text-small text-muted mt-1">
-                            Space-separated OAuth scopes. Use Discovery to auto-populate available scopes.
-                        </div>
                     </div>
 
                     {/* Validation Status */}
                     <div className="text-small">
                         <div className="flex items-center space-x-4">
-              <span className={config.clientId ? 'status-connected' : 'text-muted'}>
-                Client ID: {config.clientId ? '[OK]' : '[ ]'}
-              </span>
+                            <span className={config.clientId ? 'status-connected' : 'text-muted'}>
+                                Client ID: {config.clientId ? '[OK]' : '[ ]'}
+                            </span>
                             {(config.flow === 'client_credentials' || config.flow === 'authorization_code') && (
                                 <span className={config.clientSecret ? 'status-connected' : 'text-muted'}>
-                  Secret: {config.clientSecret ? '[OK]' : '[ ]'}
-                </span>
+                                    Secret: {config.clientSecret ? '[OK]' : '[ ]'}
+                                </span>
                             )}
                             {config.flow !== 'client_credentials' && (
                                 <span className={isValidUrl(config.authEndpoint) ? 'status-connected' : 'text-muted'}>
-                  Auth: {isValidUrl(config.authEndpoint) ? '[OK]' : '[ ]'}
-                </span>
+                                    Auth: {isValidUrl(config.authEndpoint) ? '[OK]' : '[ ]'}
+                                </span>
                             )}
                             <span className={isValidUrl(config.tokenEndpoint) ? 'status-connected' : 'text-muted'}>
-                Token: {isValidUrl(config.tokenEndpoint) ? '[OK]' : '[ ]'}
-              </span>
-                            {config.flow === 'authorization_code_pkce' && (
-                                <span className={isValidUrl(config.logoutEndpoint) ? 'status-connected' : 'text-yellow-600'}>
-                  Logout: {isValidUrl(config.logoutEndpoint) ? '[OK]' : '[OPT]'}
-                </span>
-                            )}
+                                Token: {isValidUrl(config.tokenEndpoint) ? '[OK]' : '[ ]'}
+                            </span>
                             {isAuthenticated && (
                                 <span className="status-connected">
-                  Logged In: [OK]
-                </span>
+                                    Logged In: [OK]
+                                </span>
                             )}
-                        </div>
-                        <div className="text-xs text-muted mt-1">
-                            {config.flow === 'client_credentials'
-                                ? 'Client credentials flow requires: Client ID, Secret, and Token endpoint'
-                                : config.flow === 'authorization_code'
-                                    ? 'Traditional authorization code flow requires: Client ID, Secret, Auth endpoint, and Token endpoint'
-                                    : 'PKCE authorization code flow requires: Client ID, Auth endpoint, and Token endpoint'
-                            }
                         </div>
                     </div>
                 </div>
@@ -836,9 +768,6 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                                                     {step.data.issuer && (
                                                         <div className="break-all">Issuer: {step.data.issuer}</div>
                                                     )}
-                                                    {step.data.scopes_supported && (
-                                                        <div className="break-all">Supported Scopes: {step.data.scopes_supported.join(', ')}</div>
-                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -855,7 +784,7 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
                         <div className="text-center text-muted py-4">
                             <div className="text-sm">Click "Discover" to automatically find OAuth endpoints</div>
                             <div className="text-xs mt-1">
-                                This will query your MCP server for OAuth configuration and discover the identity provider settings
+                                This will query your MCP server for OAuth configuration
                             </div>
                         </div>
                     )}
@@ -866,9 +795,28 @@ export const OAuthConfiguration: React.FC<OAuthConfigProps> = ({
 
     return (
         <div className="space-y-4">
+            {/* Scope Error Alert */}
+            {scopeError && scopeError.length > 0 && (
+                <ScopeErrorAlert
+                    invalidScopes={scopeError}
+                    currentScope={config.scope || ''}
+                    onDiscover={discoverOAuthEndpoints}
+                    onDismiss={() => setScopeError(null)}
+                />
+            )}
+
+            {/* User Info Panel */}
             {isAuthenticated && renderUserInfo()}
-            {renderConfigPanel()}
-            {renderDiscoveryPanel()}
+
+            {/* Two-column layout: Config on left, Discovery on right */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    {renderConfigPanel()}
+                </div>
+                <div>
+                    {renderDiscoveryPanel()}
+                </div>
+            </div>
         </div>
     );
 };

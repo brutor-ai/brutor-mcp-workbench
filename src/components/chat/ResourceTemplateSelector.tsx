@@ -16,7 +16,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Play, ChevronDown, ChevronRight } from 'lucide-react';
-import { MCPResourceTemplate } from '../types';
+import { MCPResourceTemplate } from '../../types';
 
 interface ResourceTemplateSelectorProps {
   resourceTemplates: MCPResourceTemplate[];

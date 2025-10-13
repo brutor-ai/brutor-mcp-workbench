@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { X, FileText, Lightbulb, ChevronDown, ChevronRight } from 'lucide-react';
-import { ChatAttachment } from '../types';
+import { ChatAttachment } from '../../types';
 
 interface AttachmentPreviewProps {
   attachments: ChatAttachment[];

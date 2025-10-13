@@ -111,6 +111,20 @@ export const useMCP = () => {
                     // Handle OAuth errors
                     console.error('OAuth authentication failed:', error);
 
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+                    // Check if this is a scope configuration error
+                    if (errorMessage.includes('OAuth scope configuration error') ||
+                        errorMessage.includes('invalid_scope')) {
+                        console.log('🔴 Scope configuration error detected - user will be shown scope error alert');
+
+                        // Don't throw - just stop the connection process
+                        // The scope error has already been logged and URL redirected
+                        setLoading(false);
+                        return false; // Indicate connection didn't complete
+                    }
+
+                    // Check if this is the "redirecting to login" message
                     if (error instanceof Error && error.message.includes('Authorization flow started')) {
                         // This is expected for authorization code flows - user is being redirected
                         console.log('User is being redirected to authorization server');
@@ -119,7 +133,23 @@ export const useMCP = () => {
                     }
 
                     // For other OAuth errors, propagate them
-                    throw new Error(`OAuth authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    if (logCallback) {
+                        logCallback({
+                            source: 'MCP',
+                            type: 'connection',
+                            status: 'error',
+                            operation: 'oauth-authentication',
+                            details: {
+                                flow: oauthConfig.flow,
+                                errorType: (error as any).errorType || 'unknown'
+                            },
+                            response: {
+                                error: errorMessage
+                            }
+                        });
+                    }
+
+                    throw new Error(`OAuth authentication failed: ${errorMessage}`);
                 }
             } else {
                 console.log('OAuth disabled, connecting without authentication');

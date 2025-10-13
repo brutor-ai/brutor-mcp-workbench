@@ -17,9 +17,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { MessageSquare, Settings, Activity, User, Shield } from 'lucide-react';
 import { BrutorLogo } from './components/BrutorLogo';
-import { ChatTab } from './components/ChatTab';
-import { CapabilitiesTab } from './components/CapabilitiesTab';
-import { ConfigTab } from './components/ConfigTab';
+import { ChatTab } from './components/chat/ChatTab.tsx';
+import { CapabilitiesTab } from './components/capabilities_test/CapabilitiesTab.tsx';
+import { ConfigTab } from './components/config_and_connect/ConfigTab.tsx';
 import { LogsPanel } from './components/LogsPanel';
 import { OAuthCallback } from './components/OAuthCallback';
 import { useChat } from './hooks/useChat';
@@ -284,20 +284,44 @@ const MainApp: React.FC = () => {
             setActiveTab(tabParam as 'chat' | 'capabilities' | 'config');
         }
 
-        // CRITICAL FIX: Check for OAuth error in URL first and clean it up
-        if (urlParams.has('error') && urlParams.get('error') === 'oauth_failed') {
-            console.log('OAuth error already processed, cleaning up URL');
+        // CRITICAL: Check for internal error flags first and handle them WITHOUT processing OAuth
+        const error = urlParams.get('error');
+
+        if (error === 'oauth_failed') {
+            console.log('⚠️ OAuth failed error detected - cleaning up URL');
             window.history.replaceState({}, '', window.location.pathname + '?tab=config');
-            return; // Exit early, don't try to process again
+            return; // Exit early, don't try to process as OAuth callback
         }
 
-        // Handle OAuth callback processing
-        // CRITICAL: Only process if:
-        // 1. We have an authorization code
-        // 2. OAuth is enabled
-        // 3. We haven't already started processing (check ref)
-        // 4. We're not already connected
-        // 5. We're not already loading
+        if (error === 'oauth_scope_error') {
+            const invalidScopes = urlParams.get('invalid_scopes')?.split(',') || [];
+
+            console.log('⚠️ OAuth scope error detected - showing scope alert');
+
+            addLogEntry({
+                source: 'MCP',
+                type: 'connection',
+                status: 'error',
+                operation: 'oauth-scope-validation',
+                details: {
+                    flow: oauthConfig.flow,
+                    configuredScope: oauthConfig.scope,
+                    invalidScopes: invalidScopes
+                },
+                response: {
+                    error: `Invalid OAuth scopes: ${invalidScopes.join(', ')}`,
+                    suggestion: 'Use the Discovery feature to find valid scopes, or check your OAuth provider documentation'
+                }
+            });
+
+            // Clean up URL immediately
+            window.history.replaceState({}, '', window.location.pathname + '?tab=config');
+            setActiveTab('config');
+            return; // Exit early, don't try to process as OAuth callback
+        }
+
+        // Now handle actual OAuth callbacks (from the OAuth provider)
+        // Only process if we have a code AND OAuth is enabled AND we're not already processing
         if (urlParams.has('code') &&
             oauthConfig.enabled &&
             (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') &&
@@ -305,7 +329,7 @@ const MainApp: React.FC = () => {
             !connected &&
             !loading) {
 
-            console.log('OAuth callback detected, starting processing...');
+            console.log('✅ Valid OAuth callback detected, starting processing...');
             console.log('OAuth callback params:', {
                 code: urlParams.get('code')?.substring(0, 10) + '...',
                 state: urlParams.get('state'),
@@ -317,10 +341,10 @@ const MainApp: React.FC = () => {
             isProcessingOAuth.current = true;
             setActiveTab('config');
 
-            console.log('Triggering connection for OAuth callback...');
+            console.log('🔄 Triggering connection for OAuth callback...');
             handleConnect()
                 .then(() => {
-                    console.log('Connection completed after OAuth callback');
+                    console.log('✅ Connection completed after OAuth callback');
 
                     // CRITICAL FIX: Use setTimeout to delay URL cleanup
                     // This prevents triggering a re-render during the connection process
@@ -339,7 +363,7 @@ const MainApp: React.FC = () => {
                     }, 2000); // Wait 2 seconds for state to fully settle
                 })
                 .catch((error) => {
-                    console.error('Connection failed after OAuth callback:', error);
+                    console.error('❌ Connection failed after OAuth callback:', error);
 
                     // Clean up URL to prevent re-processing the error
                     window.history.replaceState({}, '', window.location.pathname + '?tab=config');
@@ -727,16 +751,16 @@ const MainApp: React.FC = () => {
             {/* Navigation Tabs */}
             <div className="flex border-b border-blue-200 bg-sky-100">
                 {[
-                    { id: 'chat', label: 'Chat', icon: MessageSquare },
+                    { id: 'chat', label: 'Chat (test MCP server with LLM)', icon: MessageSquare },
                     {
                         id: 'capabilities',
-                        label: 'Capabilities',
+                        label: 'Capabilities (test MCP server by itself)',
                         icon: Activity,
                         badge: connected ?
                             (capabilities.tools.length + capabilities.resources.length + capabilities.resourceTemplates.length + capabilities.prompts.length)
                             : null
                     },
-                    { id: 'config', label: 'Configuration', icon: Settings },
+                    { id: 'config', label: 'Configure & Connect', icon: Settings },
                 ].map(({ id, label, icon: Icon, badge }) => (
                     <button
                         key={id}

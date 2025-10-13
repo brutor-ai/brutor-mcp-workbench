@@ -15,9 +15,9 @@
  */
 
 import React, { useState } from 'react';
-import { MCPCapabilities, MCPResource, MCPPrompt, MCPTool, MCPResourceTemplate } from '../types';
-import { TestableCapabilitiesList } from './TestableCapabilitiesList';
-import { UniversalContentViewer, isTextContent } from './UniversalContentViewer';
+import { MCPCapabilities, MCPResource, MCPPrompt, MCPTool, MCPResourceTemplate } from '../../types';
+import { TestableCapabilitiesList } from './TestableCapabilitiesList.tsx';
+import { UniversalContentViewer, isTextContent } from './UniversalContentViewer.tsx';
 
 interface CapabilitiesTabProps {
   connected: boolean;
@@ -374,7 +374,7 @@ export const CapabilitiesTab: React.FC<CapabilitiesTabProps> = ({
       <div className="h-full flex items-center justify-center">
         <div className="text-center p-4">
           <div className="text-muted mb-2">Not connected to MCP server</div>
-          <div className="text-small text-muted">Go to Config tab to connect first</div>
+          <div className="text-small text-muted">Go to "Configure & Connect" tab to connect first</div>
         </div>
       </div>
     );

@@ -26,7 +26,7 @@ import {
   Lightbulb,
   Copy
 } from 'lucide-react';
-import { MCPCapabilities, MCPResource, MCPPrompt, MCPTool, MCPResourceTemplate } from '../types';
+import { MCPCapabilities, MCPResource, MCPPrompt, MCPTool, MCPResourceTemplate } from '../../types';
 
 interface SchemaProperty {
   type?: string;
