@@ -311,7 +311,7 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
 
                 updatedConfig = {
                     ...config,
-                    tokenEndpoint: config.tokenEndpoint || authData.token_endpoint,
+                    tokenEndpoint: authData.token_endpoint,
                     scope: config.scope || defaultScope,
                     authEndpoint: undefined,
                     logoutEndpoint: undefined
@@ -319,9 +319,9 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
             } else {
                 updatedConfig = {
                     ...config,
-                    authEndpoint: config.authEndpoint || authData.authorization_endpoint,
-                    tokenEndpoint: config.tokenEndpoint || authData.token_endpoint,
-                    logoutEndpoint: config.logoutEndpoint || authData.end_session_endpoint,
+                    authEndpoint: authData.authorization_endpoint,
+                    tokenEndpoint: authData.token_endpoint,
+                    logoutEndpoint: authData.end_session_endpoint,
                     postLogoutRedirectUri: config.postLogoutRedirectUri || window.location.origin,
                     scope: config.scope || resourceData.scopes_supported?.join(' ') || 'openid profile email'
                 };
