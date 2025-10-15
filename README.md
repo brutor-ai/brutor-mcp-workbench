@@ -126,6 +126,7 @@ Brutor is an intelligent, interactive workbench for developing and testing MCP (
 
 ## 🔧 OpenAI Proxy Setup
 
+To get around the CORS problem you are going to need a proxy for your LLM completion calls.
 For production deployments, it's recommended to use a proxy server to keep your OpenAI API key secure.
 
 ### Setting up the Proxy
@@ -159,6 +160,7 @@ For production deployments, it's recommended to use a proxy server to keep your 
     - Leave empty to connect directly to OpenAI
 
 ### Proxy Benefits
+- **CORS**: Solves the problem that browsers/webapps cannot just connect to a different domain - blocked
 - **Security**: API key never exposed to the client
 - **Centralized Management**: One place to manage API keys
 - **Rate Limiting**: Add custom rate limiting middleware
