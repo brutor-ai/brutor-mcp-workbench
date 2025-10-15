@@ -26,6 +26,7 @@ interface ConnectTabProps {
     oauthConfig: OAuthConfig;
     selectedModel: string;
     openaiApiKey: string;
+    openaiProxyUrl: string;
     enablePortCheck: boolean;
     enableCorsCheck: boolean;
     enableHealthCheck: boolean;
@@ -43,6 +44,7 @@ export const ConnectTab: React.FC<ConnectTabProps> = ({
                                                           oauthConfig,
                                                           selectedModel,
                                                           openaiApiKey,
+                                                          openaiProxyUrl,
                                                           enablePortCheck,
                                                           enableCorsCheck,
                                                           enableHealthCheck,
@@ -77,20 +79,24 @@ export const ConnectTab: React.FC<ConnectTabProps> = ({
     };
 
     const canConnect = () => {
-        const basicRequirements = serverBaseUrl && isValidUrl(serverBaseUrl) &&
-            openaiApiKey && isValidOpenAIKey(openaiApiKey);
+      const basicRequirements = serverBaseUrl && isValidUrl(serverBaseUrl);
 
-        if (!oauthConfig.enabled) {
-            return basicRequirements;
-        }
+      // Only require API key if not using proxy
+      const llmConfigValid = openaiProxyUrl
+        ? isValidUrl(openaiProxyUrl)  // Proxy mode: just need valid proxy URL
+        : (openaiApiKey && isValidOpenAIKey(openaiApiKey)); // Direct mode: need valid API key
 
-        if (oauthConfig.flow === 'client_credentials') {
-            return basicRequirements && oauthConfig.clientId && oauthConfig.clientSecret && oauthConfig.tokenEndpoint;
-        } else if (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') {
-            return basicRequirements && oauthConfig.clientId && oauthConfig.authEndpoint && oauthConfig.tokenEndpoint;
-        }
+      if (!oauthConfig.enabled) {
+        return basicRequirements && llmConfigValid;
+      }
 
-        return basicRequirements;
+      if (oauthConfig.flow === 'client_credentials') {
+        return basicRequirements && llmConfigValid && oauthConfig.clientId && oauthConfig.clientSecret && oauthConfig.tokenEndpoint;
+      } else if (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') {
+        return basicRequirements && llmConfigValid && oauthConfig.clientId && oauthConfig.authEndpoint && oauthConfig.tokenEndpoint;
+      }
+
+      return basicRequirements && llmConfigValid;
     };
 
     const authenticationStatus = () => {
@@ -195,25 +201,40 @@ export const ConnectTab: React.FC<ConnectTabProps> = ({
                     </div>
                 </div>
 
-                {/* OpenAI Summary */}
-                <div className="mb-4 p-3 bg-gray-50 rounded border">
-                    <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
-                        <Cpu className="w-3 h-3 mr-1" />
-                        Language Model
-                    </h4>
-                    <div className="space-y-1 text-xs">
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Model:</span>
-                            <span className="font-mono text-gray-900">{selectedModel}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">API Key:</span>
-                            <span className={isValidOpenAIKey(openaiApiKey) ? 'text-green-600' : 'text-red-600'}>
-                                {isValidOpenAIKey(openaiApiKey) ? '✓ Valid' : '✗ Invalid'}
-                            </span>
-                        </div>
+              {/* OpenAI Summary */}
+              <div className="mb-4 p-3 bg-gray-50 rounded border">
+                <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center">
+                  <Cpu className="w-3 h-3 mr-1" />
+                  Language Model
+                </h4>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Model:</span>
+                    <span className="font-mono text-gray-900">{selectedModel}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Mode:</span>
+                    <span className={openaiProxyUrl ? 'text-purple-600' : 'text-blue-600'}>
+                {openaiProxyUrl ? '🔗 Proxy' : '🔑 Direct'}
+            </span>
+                  </div>
+                  {openaiProxyUrl ? (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Proxy:</span>
+                      <span className="font-mono text-gray-900 text-xs truncate">
+                    {new URL(openaiProxyUrl).hostname}
+                </span>
                     </div>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">API Key:</span>
+                      <span className={isValidOpenAIKey(openaiApiKey) ? 'text-green-600' : 'text-red-600'}>
+                    {isValidOpenAIKey(openaiApiKey) ? '✓ Valid' : '✗ Invalid'}
+                </span>
+                    </div>
+                  )}
                 </div>
+              </div>
 
                 {/* Pre-Connection Tests Summary */}
                 <div className="mb-4 p-3 bg-gray-50 rounded border">
@@ -284,13 +305,18 @@ export const ConnectTab: React.FC<ConnectTabProps> = ({
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {!canConnect() && (
-                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                                <div className="text-xs text-yellow-800">
-                                    <strong>Configuration incomplete:</strong>
-                                    <ul className="mt-1 ml-4 list-disc space-y-0.5">
+                      {!canConnect() && (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                            <div className="text-xs text-yellow-800">
+                                <strong>Configuration incomplete:</strong>
+                                <ul className="mt-1 ml-4 list-disc space-y-0.5">
                                         {!isValidUrl(serverBaseUrl) && <li>Valid MCP server URL required</li>}
-                                        {!isValidOpenAIKey(openaiApiKey) && <li>Valid OpenAI API key required</li>}
+                                        {!openaiProxyUrl && !isValidOpenAIKey(openaiApiKey) && (
+                                          <li>Valid OpenAI API key or Proxy URL required</li>
+                                        )}
+                                        {openaiProxyUrl && !isValidUrl(openaiProxyUrl) && (
+                                          <li>Valid Proxy URL required</li>
+                                        )}
                                         {oauthConfig.enabled && !oauthConfig.clientId && <li>OAuth Client ID required</li>}
                                         {oauthConfig.enabled && (oauthConfig.flow === 'client_credentials' || oauthConfig.flow === 'authorization_code') && !oauthConfig.clientSecret && (
                                             <li>OAuth Client Secret required for {oauthConfig.flow === 'client_credentials' ? 'Client Credentials' : 'Authorization Code'} flow</li>

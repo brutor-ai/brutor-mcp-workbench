@@ -22,10 +22,10 @@ export function sanitizeToolArguments(toolCall: any): any {
 
   try {
     const args = JSON.parse(toolCall.function.arguments);
-    
+
     // Remove null values completely instead of converting them
     const sanitizedArgs: Record<string, any> = {};
-    
+
     Object.entries(args).forEach(([key, value]) => {
       // Only include non-null, non-undefined values
       if (value !== null && value !== undefined) {
@@ -49,12 +49,49 @@ export function sanitizeToolArguments(toolCall: any): any {
 export class OpenAIClient {
   private apiKey: string;
   private model: string;
+  private baseUrl: string;
   private logCallback?: (entry: Omit<MCPLog, 'id' | 'timestamp'>) => void;
+  private usingProxy: boolean;
 
-  constructor(apiKey: string, model: string = 'gpt-4o', logCallback?: (entry: Omit<MCPLog, 'id' | 'timestamp'>) => void) {
-    this.apiKey = apiKey;
+  constructor(
+    apiKey: string,
+    model: string = 'gpt-4o',
+    logCallback?: (entry: Omit<MCPLog, 'id' | 'timestamp'>) => void,
+    baseUrl?: string
+  ) {
     this.model = model;
     this.logCallback = logCallback;
+
+    // Determine if using proxy
+    this.usingProxy = !!(baseUrl && baseUrl.trim());
+
+    // Use proxy URL if provided, otherwise use env variable or default
+    this.baseUrl = (baseUrl && baseUrl.trim())
+      ? baseUrl.trim()
+      : (import.meta.env.VITE_OPENAI_BASE_URL || 'https://api.openai.com');
+
+    // UPDATED: Only require API key if not using proxy
+    // When using proxy, the proxy handles authentication
+    if (this.usingProxy) {
+      // Use a placeholder or empty string for proxy mode
+      // The proxy will handle authentication
+      this.apiKey = apiKey || 'proxy-mode';
+      console.log('OpenAI Client initialized in PROXY mode:', {
+        model: this.model,
+        proxyUrl: this.baseUrl,
+        note: 'API key managed by proxy server'
+      });
+    } else {
+      // Direct mode requires API key
+      if (!apiKey) {
+        throw new Error('OpenAI API key is required when not using a proxy');
+      }
+      this.apiKey = apiKey;
+      console.log('OpenAI Client initialized in DIRECT mode:', {
+        model: this.model,
+        baseUrl: this.baseUrl
+      });
+    }
   }
 
   setLogCallback(callback: (entry: Omit<MCPLog, 'id' | 'timestamp'>) => void) {
@@ -69,7 +106,7 @@ export class OpenAIClient {
 
   async chat(messages: ChatMessage[], tools: OpenAITool[] = []): Promise<OpenAIResponse> {
     const requestId = Date.now().toString();
-    
+
     // Log the start of the chat completion
     this.log({
       source: 'LLM',
@@ -80,7 +117,8 @@ export class OpenAIClient {
         model: this.model,
         messageCount: messages.length,
         toolCount: tools.length,
-        requestId
+        requestId,
+        baseUrl: this.baseUrl
       }
     });
 
@@ -94,7 +132,12 @@ export class OpenAIClient {
         max_tokens: 4000
       };
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      // UPDATED: Use this.baseUrl instead of hardcoded URL
+      const apiUrl = `${this.baseUrl}/v1/chat/completions`;
+
+      console.log('Making OpenAI API request to:', apiUrl);
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -106,7 +149,7 @@ export class OpenAIClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = `OpenAI API error: ${response.status} ${response.statusText} - ${errorData.error?.message || 'Unknown error'}`;
-        
+
         // Log the error
         this.log({
           source: 'LLM',
@@ -118,7 +161,8 @@ export class OpenAIClient {
             messageCount: messages.length,
             toolCount: tools.length,
             requestId,
-            statusCode: response.status
+            statusCode: response.status,
+            baseUrl: this.baseUrl
           },
           response: { error: errorMessage }
         });
@@ -138,7 +182,8 @@ export class OpenAIClient {
           model: this.model,
           messageCount: messages.length,
           toolCount: tools.length,
-          requestId
+          requestId,
+          baseUrl: this.baseUrl
         },
         response: {
           model: data.model,
@@ -153,7 +198,7 @@ export class OpenAIClient {
       return data;
     } catch (error) {
       console.error('OpenAI chat error:', error);
-      
+
       // Log the error if not already logged
       if (!(error instanceof Error && error.message.includes('OpenAI API error'))) {
         this.log({
@@ -165,12 +210,13 @@ export class OpenAIClient {
             model: this.model,
             messageCount: messages.length,
             toolCount: tools.length,
-            requestId
+            requestId,
+            baseUrl: this.baseUrl
           },
           response: { error: error instanceof Error ? error.message : 'Unknown error' }
         });
       }
-      
+
       throw error;
     }
   }
@@ -200,7 +246,7 @@ export class OpenAIClient {
       if (cleanSchema.properties) {
         Object.keys(cleanSchema.properties).forEach(key => {
           const prop = { ...cleanSchema.properties[key] };
-          
+
           // For boolean properties, don't add defaults for optional parameters
           if (prop.type === 'boolean') {
             // Only keep explicit defaults that were in the original schema
@@ -208,7 +254,7 @@ export class OpenAIClient {
               // Don't add a default - let OpenAI handle optional booleans naturally
             }
           }
-          
+
           cleanSchema.properties[key] = prop;
         });
       }
