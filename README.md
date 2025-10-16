@@ -1,130 +1,187 @@
 # Brutor MCP Workbench
 
-A modern React-based web client for interacting with Model Context Protocol (MCP) servers and OpenAI's language models. Brutor provides a comprehensive interface for testing MCP capabilities, managing OAuth authentication, and conducting AI conversations with tool integration.
+A modern React-based web client for interacting with multiple Model Context Protocol (MCP) servers and OpenAI's
+language models. Brutor provides a comprehensive interface for testing MCP capabilities, managing OAuth authentication,
+and conducting AI conversations with multi-server tool integration.
 
-![Brutor MCP Client Configuration](images/brutor-config.png)
+![Brutor MCP Client Configuration](images/brutor-server-config.png)
 
-## 🎯 What is Brutor?
+## What is Brutor MCP Workbench?
 
-Brutor is an intelligent, interactive workbench for developing and testing MCP (Model Context Protocol) servers. Think of it as your Swiss Army knife for MCP development - it helps you:
+Brutor is an intelligent, interactive workbench for developing and testing MCP (Model Context Protocol) servers.
+Think of it as your Swiss Army knife for MCP development - it helps you:
 
+- **Test multiple MCP servers simultaneously** - connect to multiple servers and use their capabilities together
 - **Test MCP servers in isolation** - verify tools, resources, and prompts work correctly
-- **Test MCP servers with AI** - see how your MCP server integrates with language models
+- **Test MCP servers with AI** - see how your MCP servers integrate with language models
 - **Debug OAuth flows** - comprehensive OAuth support with automatic discovery
-- **Monitor operations** - real-time logging of all MCP and LLM interactions
+- **Monitor operations** - real-time logging of all MCP and LLM interactions with server attribution
+- **Manage context** - view and edit the LLM context window to optimize token usage
 - **Develop faster** - interactive UI for rapid iteration on MCP servers
 
 ## ✨ Key Features
 
-### 🔧 Comprehensive MCP Integration
+### Multi-Server Support (NEW!)
+- **Multiple Simultaneous Connections**: Connect to multiple MCP servers at once
+- **Server Attribution**: Every tool, resource, and prompt shows which server it comes from
+- **Visual Server Identification**: Color-coded badges for each server across the entire UI
+- **Aggregated Capabilities**: All capabilities from all servers in one unified interface
+- **Intelligent Tool Routing**: Automatically routes tool calls to the correct server
+- **Per-Server Configuration**: Individual OAuth, endpoint, and test settings for each server
+- **Server Management**: Enable/disable servers, reorder them, and view detailed information
+
+### Comprehensive MCP Integration
 - **Full MCP Protocol Support**: Connect to any MCP server using HTTP transport with StreamableHTTP
 - **Interactive Testing**: Test tools, resources, prompts, and resource templates directly in the UI
+- **Smart Parameter Handling**: Visual forms with proper validation for required vs optional parameters
 - **Real-time Capabilities Discovery**: Automatically discover and display server capabilities
 - **Content Viewing**: Built-in viewer for text-based resources with syntax highlighting
 - **Resource Templates**: Dynamic resource generation with parameterized URIs
 - **Pre-Connection Tests**: Port, CORS, and health endpoint validation before connecting
 
-### 🔐 Advanced Authentication & Security
+### Advanced Authentication & Security
 - **Multiple OAuth Flows**: Support for:
     - Authorization Code with PKCE (recommended for browser apps)
     - Authorization Code (traditional, for GitHub OAuth Apps)
     - Client Credentials (service-to-service)
+- **Per-Server OAuth**: Each server can have its own OAuth configuration
 - **OAuth Discovery**: Automatic endpoint discovery from MCP servers via `.well-known` endpoints
 - **Token Management**: Secure token storage with automatic refresh
 - **User Permissions**: Role-based access control display with read/write permissions
 - **Scope Validation**: Intelligent scope error detection with actionable guidance
 - **Multi-Provider Support**: Works with Keycloak, GitHub, Auth0, Okta, and custom OAuth providers
 
-### 💬 Intelligent Chat Interface
+### Intelligent Chat Interface
+- **Multi-Server Tool Calling**: LLM can call tools from any connected server
 - **OpenAI Integration**: Chat with GPT models (GPT-4o, GPT-4o Mini, GPT-4 Turbo) using MCP tools and resources
-- **Proxy Support**: Optional proxy server for secure API key management
+- **Proxy Support**: Optional proxy server for secure API key management and CORS handling
 - **Smart Attachment System**: Attach and use:
-    - Resources (static content from MCP server)
-    - Resource Templates (dynamic resources with parameters)
-    - Prompts (pre-configured message templates)
+    - Resources (static content from any MCP server)
+    - Resource Templates (dynamic resources with parameters from any server)
+    - Prompts (pre-configured message templates with argument configuration from any server)
     - PDF Documents (with automatic text extraction)
-- **Tool Calling**: Automatic tool invocation with multi-turn support
+- **Unified Attachment Panel**: Browse and configure all attachment types in one interface with:
+    - Three tabs: Resources | Templates | Prompts
+    - Parameter configuration for prompts and templates before attaching
+    - Live URI preview for resource templates
+    - Search and server filtering
+- **Server Attribution in Chat**: Tool calls and responses show which server was used
+- **Tool Calling**: Automatic tool invocation with multi-turn support across servers
 - **Message Threading**: Complex multi-turn conversations with context preservation
 - **Content Management**: Smart message collapsing for long content with expand/collapse
+- **Processing Indicator**: Visual hourglass overlay shows when AI is thinking or calling tools
 
-### 🧪 Interactive Capabilities Testing
+### Context Manager (NEW!)
+- **Context Window Visualization**: See exactly what's being sent to the LLM
+- **Token Estimation**: Real-time token count with visual warnings
+- **Message Management**: Remove individual messages to reduce context size
+- **Attachment Control**: Remove specific attachments from messages
+- **Capability Overview**: View all tools, resources, prompts, and templates in context
+- **Statistics Dashboard**: Track message counts, tool calls, attachments, and more
+- **Smart Recommendations**: Get suggestions when context is getting too large
+- **Copy Context**: Export full context as JSON for debugging
+
+### Interactive Capabilities Testing
+- **Multi-Server Capabilities**: Test capabilities from any connected server
+- **Server Filtering**: Filter capabilities by specific server or view all
+- **Compact Default View**: Shows only capability name and ID (e.g., "List Todo Items (list_todo_items)")
+- **Expandable Details**: Click arrow to see full description, parameters, and configuration
+- **Smart Parameter Handling**:
+    - Visual indicator (⚙️ Settings icon) when parameters are required
+    - Required parameters clearly marked with red asterisk (*)
+    - Optional parameters support null values
+    - Run button disabled (gray) when required parameters are missing
+    - Run button enabled (blue) when all requirements are met
 - **Isolated Testing**: Test MCP capabilities without involving the LLM
 - **Parameter Configuration**: Visual forms for tool arguments, prompt parameters, and template values
 - **Live Preview**: See resource template URIs resolved in real-time
 - **Result Viewing**: Dedicated panels for test results with success/error states
 - **Content Viewer**: Modal viewer for resources, prompts, and templates
 - **Schema Inspection**: View complete JSON schemas for all capabilities
+- **Error Containment**: Test errors stay in Capabilities tab and don't pollute chat
 
-### 🎨 Modern UI/UX
-- **Clean Design**: Black and white theme with sky blue accents
+### Modern UI/UX
+- **Clean Design**: Modern theme with sky blue (#1BB5E8) accents
+- **Server Color Coding**: Each server has a unique color throughout the interface
 - **Responsive Layout**: Optimized for desktop and mobile devices
-- **Real-time Logs**: Comprehensive logging panel with filtering and deduplication
+- **Real-time Logs**: Comprehensive logging panel with server attribution and filtering
 - **Interactive Components**: Collapsible sections, parameter forms, content viewers
 - **Status Indicators**: Visual feedback for connection state, OAuth status, and operations
 - **Error Handling**: User-friendly error modals with detailed diagnostics
+- **Processing Feedback**: Large, prominent loading indicators during AI operations
 
-### 📊 Advanced Logging & Monitoring
+### Advanced Logging & Monitoring (Enhanced!)
 - **Dual-Source Logging**: Separate logs for MCP operations and LLM calls
-- **Log Filtering**: Filter by source (MCP/LLM) and status (success/error/pending)
+- **Server Attribution**: Every log entry shows which server was involved
+- **Server Filtering**: Filter logs by specific server or view all
+- **Source Filtering**: Filter by source (MCP/LLM) and status (success/error/pending)
 - **Deduplication**: Automatic removal of duplicate log entries
-- **Rich Details**: Expandable logs with full request/response data
+- **Rich Details**: Expandable logs with full request/response data and server information
 - **Performance Metrics**: Duration tracking for all operations
+- **Color-Coded Status**: Visual indicators for success (green), error (red), pending (amber)
+- **Dark Theme**: Professional dark mode for the logs panel
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Node.js 16+
 - npm or yarn
 - An OpenAI API key (configured either directly or via proxy)
-- An MCP server to connect to
+- One or more MCP servers to connect to
 
 ### Installation
 
 1. **Clone the repository**
-   ```bash
+```bash
    git clone <repository-url>
    cd brutor-mcp-workbench
-   ```
+```
 
 2. **Install dependencies**
-   ```bash
+```bash
    npm install
-   ```
+```
 
 3. **Start the development server**
-   ```bash
+```bash
    npm run dev
-   ```
+```
 
 4. **Open your browser**
    Navigate to `http://localhost:3004`
 
 ### Configuration
 
-1. **Go to the "Configure & Connect" tab**
+1. **Go to the "Servers" tab**
 
-2. **Configure MCP Server**:
-    - Enter your MCP server URL (e.g., `http://localhost:3000`)
+2. **Add Your First Server**:
+    - Click "Add New Server"
+    - Enter server name (e.g., "My Todo Server")
+    - Enter server base URL (e.g., `http://localhost:3000`)
     - Set the MCP endpoint path (e.g., `/api/mcp`) or check "same as Server Base URL"
+    - Choose a color for visual identification
     - Configure pre-connection tests:
         - Port Check: Verifies server is reachable
         - CORS Check: Validates CORS configuration
         - Health Check: Tests `/health` endpoint (optional)
+    - Configure OAuth if needed
+    - Click "Save"
 
-3. **Configure OpenAI**:
+3. **Add More Servers** (Optional):
+    - Repeat the process to add additional MCP servers
+    - Each server can have different settings, colors, and OAuth
+
+4. **Configure OpenAI** (in Configure tab):
     - Select your preferred model (GPT-4o, GPT-4o Mini, or GPT-4 Turbo)
-    - **Option 1**: Enter proxy server URL (recommended for production)
+    - **Option 1**: Enter proxy server URL (recommended for production and CORS handling)
     - **Option 2**: Leave proxy URL empty to connect directly to OpenAI
 
-4. **Configure OAuth** (if required):
-    - Enable OAuth and select the appropriate flow
-    - Use the Discovery feature to automatically find endpoints
-    - Enter client credentials
-    - Configure scopes (use Discovery for automatic scope detection)
+5. **Connect to Servers**:
+    - Go to the "Connect" tab
+    - Click "Connect All" or connect to servers individually
+    - OAuth servers will prompt for login
 
-5. **Click "Connect" or "Login"**
-
-## 🔧 OpenAI Proxy Setup
+## OpenAI Proxy Setup
 
 To get around the CORS problem you are going to need a proxy for your LLM completion calls.
 For production deployments, it's recommended to use a proxy server to keep your OpenAI API key secure.
@@ -132,30 +189,30 @@ For production deployments, it's recommended to use a proxy server to keep your 
 ### Setting up the Proxy
 
 1. **Navigate to the proxy directory**:
-   ```bash
+```bash
    cd openai-proxy
-   ```
+```
 
 2. **Install proxy dependencies**:
-   ```bash
+```bash
    npm install
-   ```
+```
 
 3. **Configure the proxy**:
-   ```bash
+```bash
    export OPENAI_API_KEY=your_api_key_here
    export PORT=3010  # optional, defaults to 3010
-   ```
+```
 
 4. **Start the proxy server**:
-   ```bash
+```bash
    npm start
    # or for development with auto-restart:
    npm run dev
-   ```
+```
 
 5. **Configure Brutor to use the proxy**:
-    - In the Config tab → OpenAI tab
+    - In the Configure tab → OpenAI tab
     - Enter `http://localhost:3010` in the Proxy Server URL field
     - Leave empty to connect directly to OpenAI
 
@@ -168,113 +225,185 @@ For production deployments, it's recommended to use a proxy server to keep your 
 - **Caching**: Cache responses to reduce costs
 - **Access Control**: Implement custom authentication
 
-## 📖 Usage Guide
+## Usage Guide
 
-### Chat Tab - "Test MCP server with LLM"
-The Chat tab integrates your MCP server with OpenAI's language models for intelligent conversations.
+### Define Servers & Connect Tab - "Manage Multiple MCP Servers" (NEW!)
+The Servers tab is your central hub for managing all MCP server connections.
+
+**Features:**
+- **Add/Edit/Delete Servers**: Complete server lifecycle management
+- **Server Configuration**:
+    - Name and description for each server
+    - Base URL and endpoint configuration
+    - Visual color assignment for identification
+    - Individual OAuth settings
+    - Per-server pre-connection tests
+- **Connection Management**:
+    - Connect/disconnect individual servers
+    - View connection status at a glance
+    - Server capability counts
+- **Visual Organization**:
+    - Color-coded server cards
+    - Connection status indicators
+    - Capability summaries
+- **Quick Actions**: Edit, connect, or delete servers with one click
+
+**Use Cases:**
+- Manage multiple development servers
+- Connect to different environments (dev, staging, prod)
+- Test tool interactions across different servers
+- Compare capabilities between servers
+
+### Chat Tab - "Test Multiple MCP Servers with LLM"
+The Chat tab integrates all your MCP servers with OpenAI's language models for intelligent conversations.
 
 **Features:**
 - **Send Messages**: Type messages and press Enter to send
-- **Attach Content**: Use attachment buttons to include:
-    - Resources (static content from MCP)
-    - Resource Templates (dynamic content with parameters)
-    - Prompts (pre-configured message templates)
-    - PDF Documents (automatically extracts text)
+- **Multi-Server Tool Calling**: LLM automatically calls tools from any connected server
+- **Server Attribution**: See which server each tool was called on
+- **Unified Attachment Panel**: Single button opens a comprehensive attachment browser with:
+    - **Three Tabs**:
+        - Resources: Browse static content from all servers
+        - Templates: Configure dynamic resources with parameters
+        - Prompts: Select and configure prompt templates with arguments
+    - **Smart Configuration**:
+        - Prompts with arguments show configuration screen before attaching
+        - Templates with parameters show URI builder with live preview
+        - Resources attach directly (no configuration needed)
+    - **Visual Feedback**:
+        - Parameter badges show count (e.g., "3 params", "2 args")
+        - Required parameters marked with asterisk (*)
+        - Blue "Attach" button when ready, gray when incomplete
+    - **Search & Filter**: Find content across all servers quickly
+- **Processing Indicator**: Large hourglass animation shows when AI is thinking
 - **Tool Calling**: Automatically invokes MCP tools based on conversation context
 - **View Responses**: AI responses with formatted lists, code blocks, and citations
 - **Message History**: Complete conversation history with expand/collapse for long messages
 - **Streaming Support**: Real-time responses from the language model
 
 **Use Cases:**
-- Test how your MCP server integrates with AI assistants
-- Verify tool calling works correctly in conversational contexts
-- Develop and test complex multi-tool workflows
-- Validate resource and prompt attachments
+- Test how multiple MCP servers work together with AI
+- Verify tool calling works correctly across different servers
+- Develop and test complex multi-server workflows
+- Validate resource and prompt attachments from various sources
 
-### Capabilities Tab - "Test MCP server by itself"
-The Capabilities tab lets you test your MCP server in isolation, without involving the LLM.
+### Context Tab - "Manage LLM Context Window" (NEW!)
+The Context tab gives you complete visibility and control over what's being sent to the LLM.
 
 **Features:**
+- **Three View Modes**:
+    - **Summary**: Overview with token count, statistics, and recommendations
+    - **Messages**: Full message history with editing capabilities
+    - **Capabilities**: View all tools, resources, prompts, and templates
+
+**Summary View:**
+- Token usage with color-coded warnings (green < 4K, amber < 8K, red 8K+)
+- Message statistics (user, assistant, tool messages)
+- Attachment counts and server statistics
+- Capability breakdown by type
+- Smart recommendations when context is large
+
+**Messages View:**
+- Expand/collapse individual messages
+- Remove specific messages to reduce context
+- Remove individual attachments from messages
+- View token estimates per message
+- See message types (user, assistant, tool, system)
+- Inspect tool calls and attachments
+
+**Capabilities View:**
+- View all tools with server attribution
+- List of all resources available
+- Prompt and template counts
+- Per-server capability breakdown
+
+**Actions:**
+- Copy entire context as JSON
+- Clear all messages at once
+- Remove specific messages or attachments
+- Monitor token usage in real-time
+
+**Use Cases:**
+- Optimize context window usage
+- Debug what's being sent to the LLM
+- Remove old messages to stay under token limits
+- Verify attachments are included correctly
+- Analyze capability distribution across servers
+
+### Capabilities Tab - "Test Multiple MCP Servers"
+The Capabilities tab lets you test capabilities from all connected servers in isolation, without involving the LLM.
+
+**Features:**
+- **Compact Default View**:
+    - Shows only capability name and ID in collapsed state
+    - Example: "List Todo Items (list_todo_items)"
+    - Expansion arrow on the left to reveal details
+    - Action buttons on the right for quick access
+- **Smart Action Buttons**:
+    - **⚙️ Settings Icon**: Appears when capability has configurable parameters
+    - **▶️ Run Button**:
+        - Gray and disabled when required parameters are missing
+        - Blue and enabled when all requirements are met
+        - Shows different icons based on capability type (Play/Download)
+- **Expandable Details**: Click arrow to reveal:
+    - Full description
+    - Parameter configuration forms
+    - Schema inspection tools
+    - Test result display
+- **Multi-Server View**: See capabilities from all servers in one place
+- **Server Filtering**: Filter by specific server or view all
+- **Server Attribution**: Color-coded badges show which server each capability is from
 - **Interactive Testing**: Test any capability with parameter configuration
 - **Visual Parameter Forms**:
     - Text inputs with validation
     - Dropdowns for enums
     - Checkboxes for booleans (with null support for optional parameters)
     - Number inputs with min/max validation
+    - Required parameters marked with red asterisk (*)
 - **Content Preview**: View resource and prompt content before using
 - **Result Viewing**: Dedicated panels for success and error states
+- **Error Containment**: Test errors stay in Capabilities tab and don't pollute chat
 - **Schema Inspection**: View complete JSON schemas with expand/collapse
 - **Resource Template Testing**: Fill in parameters and see URI resolution
 
-**Test Results Panel:**
-- Real-time display of test executions
-- Success/error indicators
-- Detailed error messages for debugging
-- Tool output display
-- Timestamp tracking
-
 **Use Cases:**
 - Verify MCP server functionality without AI overhead
-- Debug tool implementations
+- Debug tool implementations across servers
 - Test resource templates with different parameters
-- Validate prompt generation
-- Inspect capability schemas
+- Compare capabilities between servers
+- Validate prompt generation from multiple sources
+- Quickly test capabilities without leaving the page
 
-### Config Tab - "Configure & Connect"
-The Config tab provides comprehensive configuration for all connection aspects.
+### OpenAI Configure 
+The Configure tab provides comprehensive configuration for OpenAI and system settings.
 
-**Sub-tabs:**
+**OpenAI Configuration**:
+- Model selection (GPT-4o, GPT-4o Mini, GPT-4 Turbo)
+- Proxy URL configuration
+- Model information (context window, pricing)
+- Direct OpenAI connection support
 
-1. **MCP Server Tab**:
-    - Server Base URL configuration
-    - MCP endpoint path setup
-    - Option for complete URLs (e.g., GitHub Copilot)
-    - Connection testing
-
-2. **OAuth Tab**:
-    - Flow selection (PKCE, Traditional, Client Credentials)
-    - Client credentials management
-    - Endpoint configuration (manual or discovered)
-    - OAuth Discovery with visual progress
-    - Scope management with error detection
-    - User information display
-    - Logout options (local vs. IdP logout)
-
-3. **OpenAI Tab**:
-    - Model selection (GPT-4o, GPT-4o Mini, GPT-4 Turbo)
-    - Proxy URL configuration
-    - Model information (context window, pricing)
-    - Direct OpenAI connection support
-
-4. **Pre-connect Tests Tab**:
-    - Port connectivity test toggle
-    - CORS configuration test toggle
-    - Health endpoint test toggle
-    - Test descriptions and recommendations
-
-5. **Connect Tab**:
-    - Configuration summary
-    - Connection status
-    - Connect/Disconnect buttons
-    - OAuth logout options
-    - Validation status for all settings
-
-### Logs Panel
-The Logs Panel provides comprehensive monitoring of all operations.
+### Logs Panel - "Monitor Multi-Server Operations" (Enhanced!)
+The Logs Panel provides comprehensive monitoring of all operations across all servers.
 
 **Features:**
 - **Dual-Source Logging**:
     - MCP: All Model Context Protocol operations
     - LLM: All language model interactions
-- **Filtering**: Filter by source (ALL/MCP/LLM) and status
-- **Expandable Entries**: Click to see full request/response details
-- **Status Indicators**: Visual icons for success, error, and pending states
+- **Server Attribution**: Every log shows which server was involved with color-coded badges
+- **Advanced Filtering**:
+    - Filter by source (ALL/MCP/LLM)
+    - Filter by server (ALL/specific server/no server)
+    - Filter by status
+- **Dark Theme**: Professional dark mode with high contrast
+- **Expandable Entries**: Click to see full request/response details and server info
+- **Status Indicators**: Color-coded icons for success (green), error (red), and pending (amber)
 - **Deduplication**: Automatic removal of duplicate entries
 - **Performance Tracking**: Operation duration for all requests
-- **Statistics**: Real-time counts of successful and failed operations
+- **Statistics**: Real-time counts of successful and failed operations by server
 
 **Log Types:**
-- `TOOL`: Tool execution logs
+- `TOOL`: Tool execution logs with server attribution
 - `RESOURCE`: Resource read operations
 - `PROMPT`: Prompt retrieval
 - `CONN`: Connection and authentication
@@ -282,76 +411,7 @@ The Logs Panel provides comprehensive monitoring of all operations.
 - `COMP`: Completion requests
 - `EMBED`: Embedding operations
 
-## 🎯 Configuration Examples
-
-### Local MCP Server with Proxy
-```
-MCP Server:
-  Server Base URL: http://localhost:3000
-  MCP Endpoint Path: /api/mcp
-  ☑ Port Check
-  ☑ CORS Check
-  ☑ Health Check
-
-OpenAI:
-  Proxy URL: http://localhost:3000
-  Model: GPT-4o
-
-OAuth: Disabled
-```
-
-### Local MCP Server with Direct OpenAI
-```
-MCP Server:
-  Server Base URL: http://localhost:3000
-  MCP Endpoint Path: /api/mcp
-
-OpenAI:
-  Proxy URL: (empty)
-  Model: GPT-4o Mini
-
-OAuth: Disabled
-```
-
-### Keycloak-Protected MCP Server (PKCE)
-```
-MCP Server:
-  Server Base URL: https://your-server.com
-  MCP Endpoint Path: /api/mcp
-
-OAuth:
-  Flow: Authorization Code with PKCE
-  Client ID: mcp-spa-client
-  ☑ Use Discovery
-  Scope: openid profile todo:read todo:write
-```
-
-### GitHub Copilot MCP
-```
-MCP Server:
-  Server Base URL: https://api.githubcopilot.com/mcp
-  ☑ MCP endpoint is the same as Server Base URL
-
-OAuth:
-  Flow: Authorization Code (traditional)
-  Client ID: your-github-app-client-id
-  Client Secret: your-github-app-secret
-```
-
-### Service-to-Service with Client Credentials
-```
-MCP Server:
-  Server Base URL: https://api.example.com
-  MCP Endpoint Path: /mcp
-
-OAuth:
-  Flow: Client Credentials
-  Client ID: service-client
-  Client Secret: your-secret
-  Scope: mcp:read mcp:write
-```
-
-## 🔐 OAuth Flow Details
+## OAuth Flow Details
 
 ### Authorization Code with PKCE (Recommended)
 **Best for**: Single-page applications, mobile apps, public clients
@@ -400,7 +460,7 @@ OAuth:
 3. Scope is optional but recommended
 4. Suitable for automated workflows
 
-## 📱 OpenAI Models
+## OpenAI Models
 
 ### GPT-4o
 - **Best for**: Complex reasoning, multimodal tasks, specialized applications
@@ -420,39 +480,45 @@ OAuth:
 - **Pricing**: $10.00/1M input tokens, $30.00/1M output tokens
 - **Features**: Proven reliability for production workloads
 
-## 🏗️ Architecture
+## Architecture
 
 ### Core Components
 
 **Frontend (React + TypeScript):**
-- `App.tsx`: Main application shell with routing and state management
-- `useMCP.ts`: React hook for MCP server communication
-- `useChat.ts`: Hook for chat functionality and message management
+- `App.tsx`: Main application shell with multi-server state management
+- `useMultiServerMCP.ts`: React hook for managing multiple MCP server connections
+- `useMultiServerChat.ts`: Hook for chat functionality with multi-server tool routing
 - `mcpClient.ts`: MCP protocol client with StreamableHTTP transport
 - `openaiClient.ts`: OpenAI API client with proxy support and tool integration
+
+**Multi-Server Components (NEW):**
+- `ServersTab.tsx`: Server management interface
+- `ServerConfigDialog.tsx`: Server configuration modal
+- `ServerCard.tsx`: Individual server display with status
+- `ServerBadge.tsx`: Color-coded server identification badge
+- `ContextTab.tsx`: Context window manager and editor
 
 **Authentication:**
 - `OAuthTokenManager.ts`: Unified OAuth token management for all flows
 - `AuthCodeFlowManager.ts`: PKCE flow implementation with automatic token refresh
 - `TraditionalAuthCodeFlowManager.ts`: Traditional OAuth flow (GitHub support)
-- Automatic token refresh and validation
+- Automatic token refresh and validation per server
 - Scope error detection and guidance
 
 **UI Components:**
-- `ChatTab.tsx`: Chat interface with attachment system
-- `CapabilitiesTab.tsx`: Interactive MCP testing interface
-- `ConfigTab.tsx`: Multi-section configuration management
+- `ChatTab.tsx`: Chat interface with unified attachment panel
+- `CapabilitiesTab.tsx`: Interactive MCP testing interface with compact view
 - `OpenAITab.tsx`: OpenAI model and proxy configuration
 - `OAuthTab.tsx`: OAuth configuration with discovery
-- `LogsPanel.tsx`: Real-time operation logging
+- `LogsPanel.tsx`: Real-time operation logging with server attribution
+- `ContextTab.tsx`: Context window visualization and management
 - `BrutorLogo.tsx`: Animated branding component
+- `MessageRenderer.tsx`: Chat message rendering with server badges
 - `UniversalContentViewer.tsx`: Modal viewer for resources, prompts, and templates
-- `TestableCapabilitiesList.tsx`: Interactive capability testing with parameter forms
+- `TestableCapabilitiesList.tsx`: Interactive capability testing with smart parameter handling
 
 **Utility Components:**
-- `ResourceSelector.tsx`: Modal for choosing resources
-- `ResourceTemplateSelector.tsx`: Template configuration with parameter inputs
-- `PromptSelector.tsx`: Prompt selection with argument configuration
+- `AttachmentPanel.tsx`: Unified attachment browser with three tabs (Resources/Templates/Prompts)
 - `PdfUploader.tsx`: PDF processing with text extraction
 - `AttachmentPreview.tsx`: Attachment display with expand/collapse
 - `ConnectionErrorModal.tsx`: Detailed error diagnostics
@@ -466,39 +532,55 @@ OAuth:
 
 ### Data Flow
 
-1. **Connection Flow**:
-    - User configures MCP server and authentication
-    - Pre-connection tests (port, CORS, health) run automatically
-    - OAuth token acquired if enabled (with automatic flow handling)
-    - MCP client connects using StreamableHTTP transport
-    - Capabilities loaded and cached
+1. **Multi-Server Connection Flow** (UPDATED):
+    - User configures multiple MCP servers in Servers tab
+    - Each server has independent settings (URL, OAuth, colors, tests)
+    - Pre-connection tests run for each server
+    - OAuth tokens acquired per server if enabled
+    - Multiple MCP clients connect simultaneously
+    - Capabilities aggregated from all servers with attribution
 
-2. **Chat Flow**:
-    - User sends message with optional attachments
-    - Attachments processed (resources read, prompts generated, templates resolved)
+2. **Multi-Server Chat Flow** (UPDATED):
+    - User clicks attachment button to open unified panel
+    - Three tabs available: Resources, Templates, Prompts
+    - For prompts with arguments: configuration screen appears
+    - For templates with parameters: URI builder with preview shown
+    - For resources: direct attachment (no configuration)
+    - User configures parameters and clicks blue "Attach" button
     - Message context built with attachment content
-    - OpenAI called with conversation history and tools
-    - Tool calls executed against MCP server
-    - Results incorporated and final response generated
-    - Multi-turn tool calling supported automatically
+    - OpenAI called with conversation history and tools from ALL servers
+    - Tool calls automatically routed to correct server
+    - Results include server attribution
+    - Multi-turn tool calling supported across servers
 
-3. **Testing Flow**:
-    - User selects capability to test
-    - Parameters configured via visual forms
-    - Test executed directly against MCP server
-    - Results displayed in dedicated panel
+3. **Testing Flow** (UPDATED):
+    - User views compact capability list (name + ID only)
+    - Settings icon (⚙️) indicates configurable parameters
+    - Click expansion arrow to see full details
+    - Configure required parameters (marked with *)
+    - Run button changes from gray (disabled) to blue (enabled)
+    - Test executed directly against specific MCP server
+    - Results displayed in Capabilities tab (not in chat)
     - Content viewer available for successful resource reads
 
-4. **OAuth Flow**:
-    - User clicks Login/Connect
+4. **Context Management Flow** (NEW):
+    - User views context in Context tab
+    - Token estimation shows total size with warnings
+    - User can remove messages or attachments
+    - Context automatically updated
+    - Recommendations provided for optimization
+    - Copy context for debugging
+
+5. **OAuth Flow** (PER-SERVER):
+    - User clicks Login for specific server
     - Redirected to OAuth provider
     - Authorization code returned to callback
     - Token exchange performed (with PKCE or client secret)
-    - Tokens stored and managed automatically
-    - Refresh handled transparently
+    - Tokens stored per server
+    - Refresh handled transparently per server
     - Logout supports both local and IdP logout
 
-## 🛠️ Development
+## Development
 
 ### Available Scripts
 ```bash
@@ -522,14 +604,22 @@ npm run dev          # Start with nodemon (auto-restart)
 src/
 ├── components/
 │   ├── chat/              # Chat interface components
+│   │   ├── ChatTab.tsx
+│   │   ├── MessageRenderer.tsx
+│   │   └── AttachmentPanel.tsx (Unified three-tab panel)
 │   ├── capabilities_test/ # Testing interface components
+│   │   └── TestableCapabilitiesList.tsx (Compact view with smart buttons)
 │   ├── config_and_connect/# Configuration components
 │   ├── BrutorLogo.tsx     # Branding component
-│   ├── LogsPanel.tsx      # Logging component
+│   ├── ContextTab.tsx     # Context manager (NEW)
+│   ├── LogsPanel.tsx      # Logging component (ENHANCED)
+│   ├── ServersTab.tsx     # Server management (NEW)
+│   ├── ServerCard.tsx     # Server display (NEW)
+│   ├── ServerBadge.tsx    # Server identification (NEW)
 │   └── OAuthCallback.tsx  # OAuth callback handler
 ├── hooks/
-│   ├── useChat.ts         # Chat functionality hook
-│   └── useMCP.ts          # MCP connection hook
+│   ├── useMultiServerChat.ts  # Multi-server chat hook (NEW)
+│   └── useMultiServerMCP.ts   # Multi-server MCP hook (NEW)
 ├── lib/
 │   ├── mcpClient.ts       # MCP protocol client
 │   ├── openaiClient.ts    # OpenAI API client
@@ -537,17 +627,17 @@ src/
 │   ├── AuthCodeFlowManager.ts        # PKCE flow
 │   └── TraditionalAuthCodeFlowManager.ts # Traditional OAuth
 ├── types/
-│   └── index.ts           # TypeScript definitions
-├── styles/            # CSS and styling
-└── main.tsx          # Application entry point
+│   └── index.ts           # TypeScript definitions (UPDATED)
+├── styles/                # CSS and styling
+└── main.tsx              # Application entry point
 
 openai-proxy/
-├── server.js         # Express proxy server
-├── package.json      # Dependencies
-└── README.md        # Proxy documentation
+├── server.js             # Express proxy server
+├── package.json          # Dependencies
+└── README.md            # Proxy documentation
 
 public/
-└── brutor-logo.png  # Branding assets
+└── brutor-logo.png      # Branding assets
 ```
 
 ### Key Technologies
@@ -562,37 +652,82 @@ public/
 - **node-fetch**: HTTP client for proxy
 - **React Router**: Client-side routing for OAuth callbacks
 
-## 🐛 Troubleshooting
+## Troubleshooting
+
+### Multi-Server Issues (NEW)
+
+**Tool Routing Failures:**
+- Check that tool names are unique across servers
+- Review logs to see which server is being called
+- Verify all servers are connected
+- Check server badges in Capabilities tab
+
+**Context Too Large:**
+- Use Context tab to view token usage
+- Remove old messages that are no longer relevant
+- Remove attachments that have been processed
+- Clear conversation and start fresh if needed
+
+**Server Color Confusion:**
+- Edit server configuration to change colors
+- Use distinct colors for each server
+- Server badges appear throughout the UI
+
+**Attachment Configuration:**
+- Ensure required parameters are filled (marked with *)
+- Blue "Attach" button indicates ready to attach
+- Gray button means parameters are missing
+- Check parameter badges for count
 
 ### Connection Issues
 
 **Health Check Failures:**
 - Disable health check if your MCP server doesn't provide `/health`
 - Some MCP servers only implement the MCP protocol endpoint
+- Configure per-server in server settings
 
 **CORS Errors:**
 - Ensure your MCP server sends proper CORS headers:
-  ```
+```
   Access-Control-Allow-Origin: http://localhost:3004
   Access-Control-Allow-Methods: GET, POST, OPTIONS
   Access-Control-Allow-Headers: Content-Type, Authorization
-  ```
+```
 - Check that OPTIONS requests aren't redirected
 - Verify the server allows your client origin
+- Consider using the OpenAI proxy to avoid CORS issues
 
 **Connection Refused:**
 - Verify the MCP server is running
-- Check the URL and port are correct
+- Check the URL and port are correct in server configuration
 - Ensure no firewall is blocking the connection
 - For local servers, use `http://` not `https://`
 
 **404 Not Found:**
-- Verify the MCP endpoint path is correct
+- Verify the MCP endpoint path is correct in server settings
 - Common paths: `/api/mcp`, `/mcp`, `/v1/mcp`, or `/` (root)
 - Check "MCP endpoint is the same as Server Base URL" if using complete URLs
 - Review your MCP server's endpoint configuration
 
+### Capabilities Testing Issues
+
+**Run Button Disabled:**
+- Check for settings icon (⚙️) indicating parameters needed
+- Expand capability to see parameter form
+- Fill in all required parameters (marked with *)
+- Button turns blue when ready
+
+**Test Results Not Showing:**
+- Results display in Capabilities tab only (not in chat)
+- Errors are contained to testing panel
+- Check test results section on right side
+
 ### OAuth Issues
+
+**Per-Server OAuth:**
+- Each server can have different OAuth configuration
+- Check OAuth settings in server configuration dialog
+- Ensure redirect URIs match for all servers
 
 **Discovery Fails:**
 - Manually configure endpoints if discovery doesn't work
@@ -614,6 +749,7 @@ public/
 - Clear localStorage and re-authenticate
 - Check token expiry settings in OAuth provider
 - Verify refresh token is being returned (check logs)
+- Review per-server token status in Logs panel
 
 **Permission Errors:**
 - Check user roles in OAuth provider
@@ -629,7 +765,7 @@ public/
 
 **Proxy Not Responding:**
 - Check proxy server is running: `cd openai-proxy && npm start`
-- Verify proxy port (default 3000)
+- Verify proxy port (default 3010)
 - Check `OPENAI_API_KEY` environment variable is set on proxy
 
 **API Key Errors:**
@@ -649,20 +785,22 @@ public/
 
 ### Performance Issues
 
-**Large Messages:**
-- Long content automatically collapses with expand/collapse
-- Use attachment system for large documents
-- Split very large conversations
+**Large Context:**
+- Use Context tab to monitor token usage
+- Remove old messages to reduce context size
+- Clear attachments that have been processed
+- Token warnings appear at 4K (amber) and 8K (red)
+
+**Multiple Server Latency:**
+- Check network latency to each server in Logs panel
+- Monitor per-server response times
+- Consider disabling unused servers
 
 **Memory Usage:**
 - Logs automatically limited to 100 entries
 - Clear logs periodically via UI
 - Deduplication reduces memory footprint
-
-**Slow Responses:**
-- Check network latency to MCP server
-- Monitor OpenAI API response times in logs
-- Consider using GPT-4o Mini for faster responses
+- Close unused server connections
 
 ### UI/UX Issues
 
@@ -671,17 +809,22 @@ public/
 - Check browser console for loading errors
 - Verify image path in BrutorLogo component
 
+**Server Colors Not Showing:**
+- Colors use inline styles, not Tailwind classes
+- Check ServerBadge component for correct color mapping
+- Verify server configuration has color assigned
+
 **OAuth Callback Loops:**
 - Clear browser localStorage
 - Check for conflicting OAuth state
-- Verify redirect URI matches configuration
+- Verify redirect URI matches configuration for each server
 
 **Message Formatting:**
 - Ensure content uses proper markdown formatting
 - Check for malformed tool responses
-- Review message structure in logs
+- Review message structure in logs with server attribution
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -696,15 +839,17 @@ public/
 - Add appropriate type definitions for new features
 - Include JSDoc comments for complex functions
 - Test OAuth flows thoroughly before submitting
+- Test multi-server scenarios
 - Ensure responsive design works on different screen sizes
 - Test both proxy and direct OpenAI connection modes
 - Verify MCP protocol compliance
-- Add logging for new operations
+- Add logging for new operations with server attribution
+- Maintain color consistency across components
 
-## 🔒 Security Considerations
+## Security Considerations
 
 ### Production Deployment
-- **Always use a proxy server** to protect your OpenAI API key
+- **Always use a proxy server** to protect your OpenAI API key and handle CORS
 - **Enable HTTPS** for both client and proxy server
 - **Implement rate limiting** on the proxy to prevent abuse
 - **Monitor API usage** through proxy logs
@@ -716,11 +861,19 @@ public/
 ### OAuth Security
 - Use PKCE flow for all single-page applications
 - Store tokens securely (httpOnly cookies in production)
-- Implement proper session management
+- Implement proper session management per server
 - Use state parameter to prevent CSRF
 - Validate redirect URIs strictly
 - Enable logout endpoints for proper cleanup
 - Monitor for scope changes and token misuse
+- Review per-server token status in logs
+
+### Multi-Server Security (NEW)
+- Verify OAuth configuration for each server independently
+- Monitor tool routing to ensure calls go to correct servers
+- Review server attribution in logs for security auditing
+- Use distinct OAuth clients for different servers in production
+- Implement server-specific access controls
 
 ### Development
 - **Never commit API keys** to version control
@@ -728,22 +881,24 @@ public/
 - **Test OAuth flows** in safe environments
 - **Clear localStorage** when switching between environments
 - **Use different OAuth clients** for dev/staging/production
+- **Test multi-server scenarios** thoroughly
 
-## 📄 License
+## License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## Support
 
 For issues and questions:
 
-1. **Check the Logs Panel**: Built-in logs provide detailed error information
-2. **Review Connection Tests**: Pre-connection tests help diagnose issues
-3. **Verify MCP Server**: Ensure your MCP server implements the protocol correctly
-4. **OAuth Configuration**: Match configuration with identity provider settings
-5. **Proxy Server**: Check proxy server logs for OpenAI API errors
-6. **Browser Console**: Review console for additional debugging information
-7. **GitHub Issues**: Report bugs and request features via GitHub issues
+1. **Check the Logs Panel**: Built-in logs provide detailed error information with server attribution
+2. **Review Connection Tests**: Pre-connection tests help diagnose issues per server
+3. **Verify MCP Servers**: Ensure your MCP servers implement the protocol correctly
+4. **Check Context Tab**: Monitor token usage and context window contents
+5. **OAuth Configuration**: Match configuration with identity provider settings per server
+6. **Proxy Server**: Check proxy server logs for OpenAI API errors
+7. **Browser Console**: Review console for additional debugging information
+8. **GitHub Issues**: Report bugs and request features via GitHub issues
 
 ### Common Support Resources
 - MCP Protocol: https://github.com/modelcontextprotocol/specification
@@ -751,7 +906,7 @@ For issues and questions:
 - OAuth 2.0: https://oauth.net/2/
 - Keycloak: https://www.keycloak.org/documentation
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with the official [Model Context Protocol SDK](https://github.com/modelcontextprotocol/sdk)
 - Inspired by the need for better MCP server testing and development tools
@@ -760,12 +915,18 @@ For issues and questions:
 - OpenAI for providing powerful language models
 - The open-source community for amazing tools and libraries
 
-## 🗺️ Roadmap
+## Roadmap
 
 Future enhancements planned:
-- [ ] Multiple MCP Servers support
-- [ ] Integration with more OAuth providers
+- [x] Multiple MCP Servers support ✅
+- [x] Context window management and editing ✅
+- [x] Server attribution throughout the UI ✅
+- [x] Unified attachment panel with three tabs ✅
+- [x] Smart parameter handling in Capabilities tab ✅
+- [ ] Multiple LLM support
+- [ ] Server groups and categories
+- [ ] Advanced context optimization
 
 ---
 
-**Brutor MCP Workbench** - Your intelligent companion for Model Context Protocol development 🐙
+**Brutor MCP Workbench** - Your intelligent companion for multi-server Model Context Protocol development

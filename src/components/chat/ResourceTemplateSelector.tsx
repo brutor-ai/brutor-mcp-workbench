@@ -100,7 +100,7 @@ export const ResourceTemplateSelector: React.FC<ResourceTemplateSelectorProps> =
           id={key}
           value={value}
           onChange={(e) => handleParamChange(key, e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
           placeholder={`Enter ${key}`}
         />
       </div>
@@ -152,7 +152,7 @@ export const ResourceTemplateSelector: React.FC<ResourceTemplateSelectorProps> =
                 placeholder="Search resource templates..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 autoFocus={!selectedTemplate}
               />
             </div>
@@ -183,7 +183,7 @@ export const ResourceTemplateSelector: React.FC<ResourceTemplateSelectorProps> =
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex items-start space-x-3 flex-1 min-w-0">
-                              <FileText className="w-4 h-4 text-blue-600 mt-1 flex-shrink-0" />
+                              <FileText className="w-4 h-4 text-primary-600 mt-1 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-sm text-gray-900 truncate">
                                   {template.name}
@@ -295,7 +295,7 @@ export const ResourceTemplateSelector: React.FC<ResourceTemplateSelectorProps> =
                       <button
                         onClick={handleSubmit}
                         disabled={!canSubmit}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-1"
+                        className="px-4 py-2 bg-primary-500 text-white text-sm rounded-md hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-1"
                       >
                         <Play className="w-3 h-3" />
                         <span>Use Template</span>

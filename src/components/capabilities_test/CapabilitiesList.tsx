@@ -135,7 +135,7 @@ export const CapabilitiesList: React.FC<CapabilitiesListProps> = ({
                           {section.id === 'tools' && item.inputSchema && (
                             <button
                               onClick={() => toggleItem(itemId)}
-                              className="text-small text-blue-600 hover:underline"
+                              className="text-small text-primary-600 hover:underline"
                             >
                               {isExpanded ? 'Hide' : 'Show'} schema
                             </button>
@@ -159,7 +159,7 @@ export const CapabilitiesList: React.FC<CapabilitiesListProps> = ({
                           {section.id === 'prompts' && item.arguments && Object.keys(item.arguments).length > 0 && (
                             <button
                               onClick={() => toggleItem(itemId)}
-                              className="text-small text-blue-600 hover:underline"
+                              className="text-small text-primary-600 hover:underline"
                             >
                               {isExpanded ? 'Hide' : 'Show'} arguments
                             </button>

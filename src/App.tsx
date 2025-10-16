@@ -1,941 +1,722 @@
 /*
  * Copyright 2025 Martin Bergljung
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * App.tsx - Multi-Server MCP Client Application
+ * ENHANCED: Connection abort support and proper OAuth state cleanup
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { MessageSquare, Settings, Activity, User, Shield } from 'lucide-react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { MessageSquare, Server, FileText, Database, FlaskConical, Zap } from 'lucide-react';
+
 import { BrutorLogo } from './components/BrutorLogo';
-import { ChatTab } from './components/chat/ChatTab.tsx';
-import { CapabilitiesTab } from './components/capabilities_test/CapabilitiesTab.tsx';
-import { ConfigTab } from './components/config_and_connect/ConfigTab.tsx';
+import { ChatTab } from './components/chat/ChatTab';
+import { ContextTab } from './components/ContextTab';
+import { CapabilitiesTab } from './components/capabilities_test/CapabilitiesTab';
 import { LogsPanel } from './components/LogsPanel';
-import { OAuthCallback } from './components/OAuthCallback';
-import { useChat } from './hooks/useChat';
-import { useMCP } from './hooks/useMCP';
-import { MCPResource, MCPPrompt, MCPTool, MCPLog, MCPResourceTemplate } from './types';
-import { OAuthConfig } from './types';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ServersTab } from './components/servers/ServersTab.tsx';
+import type { ServerState } from './components/servers/ServersTab.tsx';
+import { ServerConfigDialog } from './components/servers/ServerConfigDialog.tsx';
+import { OpenAITab } from './components/llm/OpenAITab';
+import { ConnectionErrorModal } from './components/ConnectionErrorModal.tsx';
+import { TokenExpiredModal } from './components/TokenExpiredModal.tsx';
+import { useMCPServers } from './hooks/useMCPServers';
+import { useMultiServerChat } from './hooks/useMultiServerChat';
+import { MCPLog, ServerConfig } from './types';
 
-const MainApp: React.FC = () => {
-  // State management
-  const [activeTab, setActiveTab] = useState<'chat' | 'capabilities' | 'config'>(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get('tab');
-    if (tabParam === 'config' || tabParam === 'capabilities') {
-      return tabParam as 'chat' | 'capabilities' | 'config';
-    }
-    return 'chat';
-  });
+const App = () => {
+    // ============================================================================
+    // STATE MANAGEMENT
+    // ============================================================================
 
-  // FIXED: Use useRef instead of useState to prevent re-renders causing duplicate processing
-  const isProcessingOAuth = useRef(false);
+    const [activeTab, setActiveTab] = useState<'chat' | 'context' | 'capabilities' | 'servers' | 'configure' | 'logs'>('chat');
+    const [logs, setLogs] = useState<MCPLog[]>([]);
 
-  const [mcpServerUrl, setMcpServerUrl] = useState(() =>
-    localStorage.getItem('mcpServerUrl') || 'http://localhost:3000'
-  );
+    // Global configuration (persisted to localStorage)
+    const [openaiApiKey, setOpenaiApiKey] = useState(() =>
+        localStorage.getItem('openaiApiKey') || ''
+    );
+    const [selectedModel, setSelectedModel] = useState(() =>
+        localStorage.getItem('selectedModel') || 'gpt-4o'
+    );
+    const [openaiProxyUrl, setOpenaiProxyUrl] = useState(() =>
+        localStorage.getItem('openaiProxyUrl') || ''
+    );
 
-  const [mcpEndpointPath, setMcpEndpointPath] = useState(() =>
-    localStorage.getItem('mcpEndpointPath') || '/api/mcp'
-  );
+    // Server configuration dialog state
+    const [showServerDialog, setShowServerDialog] = useState(false);
+    const [editingServer, setEditingServer] = useState<ServerConfig | null>(null);
 
-  const [endpointSameAsBase, setEndpointSameAsBase] = useState(() =>
-    localStorage.getItem('endpointSameAsBase') === 'true'
-  );
+    // Connection error modal state
+    const [connectionError, setConnectionError] = useState<{
+        error: Error;
+        serverName: string;
+        serverUrl: string;
+        testResults?: any;
+    } | null>(null);
 
-  const [enablePortCheck, setEnablePortCheck] = useState<boolean>(() => {
-    const stored = localStorage.getItem('enablePortCheck');
-    return stored !== null ? JSON.parse(stored) : true;
-  });
+    // Token expired modal state
+    const [tokenExpiredServer, setTokenExpiredServer] = useState<{
+        serverId: string;
+        serverName: string;
+    } | null>(null);
 
-  const [enableHealthCheck, setEnableHealthCheck] = useState<boolean>(() => {
-    const stored = localStorage.getItem('enableHealthCheck');
-    return stored !== null ? JSON.parse(stored) : true;
-  });
+    // ============================================================================
+    // MULTI-SERVER HOOKS
+    // ============================================================================
 
-  const [enableCorsCheck, setEnableCorsCheck] = useState<boolean>(() => {
-    const stored = localStorage.getItem('enableCorsCheck');
-    return stored !== null ? JSON.parse(stored) : true;
-  });
+    const {
+        servers,
+        connections,
+        addServer,
+        updateServer,
+        removeServer,
+        connectToServer,
+        disconnectServer,
+        abortConnection, // NEW: Abort support
+        clearServerError,
+        aggregatedCapabilities,
+        routeToolCall,
+        readResourceFromServer,
+        getPromptFromServer,
+        openaiClient,
+        connectedCount,
+        isAnyConnected,
+        getConnection
+    } = useMCPServers();
 
-  const [openaiApiKey, setOpenaiApiKey] = useState(() =>
-    localStorage.getItem('openaiApiKey') || ''
-  );
+    const {
+        messages,
+        currentMessage,
+        setCurrentMessage,
+        isProcessing,
+        sendMessage,
+        currentAttachments,
+        addAttachment,
+        removeAttachment,
+        clearMessages,
+        removeMessage,
+        removeAttachmentFromMessage
+    } = useMultiServerChat();
 
-  const [selectedModel, setSelectedModel] = useState(() =>
-    localStorage.getItem('selectedModel') || 'gpt-4o'
-  );
+    // ============================================================================
+    // COMPUTED VALUES
+    // ============================================================================
 
-  // ADD: OpenAI Proxy URL state
-  const [openaiProxyUrl, setOpenaiProxyUrl] = useState(() =>
-    localStorage.getItem('openaiProxyUrl') || ''
-  );
+    // Build serverStates for ServersTab - INCLUDES tokenManager for OAuth user info
+    const serverStates = useMemo<Record<string, ServerState>>(() => {
+        const states: Record<string, ServerState> = {};
 
-  const [oauthToken, setOauthToken] = useState(() =>
-    localStorage.getItem('oauthToken') || ''
-  );
+        connections.forEach(conn => {
+            states[conn.serverId] = {
+                connected: conn.connected,
+                connecting: conn.loading,
+                capabilities: conn.capabilities,
+                error: conn.error,
+                tokenManager: conn.tokenManager
+            };
+        });
 
-  const [oauthConfig, setOauthConfig] = useState<OAuthConfig>(() => {
-    const stored = localStorage.getItem('oauthConfig');
-    return stored ? JSON.parse(stored) : {
-      enabled: false,
-      flow: 'authorization_code_pkce',
-      clientId: 'mcp-spa-client',
-      clientSecret: '',
-      authEndpoint: '',
-      tokenEndpoint: '',
-      logoutEndpoint: '',
-      postLogoutRedirectUri: window.location.origin,
-      scope: 'openid profile todo:read todo:write'
+        return states;
+    }, [connections]);
+
+    // Check for token expiration errors and show modal
+    useEffect(() => {
+        connections.forEach(conn => {
+            if (conn.error?.includes('Authentication expired') && !tokenExpiredServer) {
+                const server = servers.find(s => s.id === conn.serverId);
+                if (server) {
+                    setTokenExpiredServer({
+                        serverId: conn.serverId,
+                        serverName: server.name
+                    });
+                }
+            }
+        });
+    }, [connections, servers, tokenExpiredServer]);
+
+    // Get error and success counts for logs badge
+    const logStats = {
+        total: logs.length,
+        errors: logs.filter(log => log.status === 'error').length,
+        success: logs.filter(log => log.status === 'success').length
     };
-  });
 
-  const [logs, setLogs] = useState<MCPLog[]>([]);
+    // ============================================================================
+    // PERSISTENCE
+    // ============================================================================
 
-  // Save settings to localStorage
-  useEffect(() => {
-    localStorage.setItem('mcpServerUrl', mcpServerUrl);
-  }, [mcpServerUrl]);
+    useEffect(() => {
+        localStorage.setItem('openaiApiKey', openaiApiKey);
+    }, [openaiApiKey]);
 
-  useEffect(() => {
-    localStorage.setItem('mcpEndpointPath', mcpEndpointPath);
-  }, [mcpEndpointPath]);
+    useEffect(() => {
+        localStorage.setItem('selectedModel', selectedModel);
+    }, [selectedModel]);
 
-  useEffect(() => {
-    localStorage.setItem('endpointSameAsBase', endpointSameAsBase.toString());
-  }, [endpointSameAsBase]);
+    useEffect(() => {
+        localStorage.setItem('openaiProxyUrl', openaiProxyUrl);
+    }, [openaiProxyUrl]);
 
-  useEffect(() => {
-    localStorage.setItem('enablePortCheck', JSON.stringify(enablePortCheck));
-  }, [enablePortCheck]);
+    // ============================================================================
+    // LOGGING
+    // ============================================================================
 
-  useEffect(() => {
-    localStorage.setItem('enableHealthCheck', JSON.stringify(enableHealthCheck));
-  }, [enableHealthCheck]);
+    const addLogEntry = useCallback((entry: Omit<MCPLog, 'id' | 'timestamp'>) => {
+        const newLog: MCPLog = {
+            ...entry,
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date(),
+        };
+        setLogs(prev => [newLog, ...prev.slice(0, 99)]);
+    }, []);
 
-  useEffect(() => {
-    localStorage.setItem('enableCorsCheck', JSON.stringify(enableCorsCheck));
-  }, [enableCorsCheck]);
+    // ============================================================================
+    // CHAT HANDLERS
+    // ============================================================================
 
-  useEffect(() => {
-    localStorage.setItem('openaiApiKey', openaiApiKey);
-  }, [openaiApiKey]);
+    const handleSendMessage = useCallback(async () => {
+        if (!openaiClient || !isAnyConnected) return;
 
-  useEffect(() => {
-    localStorage.setItem('selectedModel', selectedModel);
-  }, [selectedModel]);
+        // Build resource readers map (per-server)
+        const resourceReaders = new Map();
+        connections.forEach(conn => {
+            if (conn.connected) {
+                resourceReaders.set(conn.serverId, (uri: string) =>
+                    readResourceFromServer(conn.serverId, uri)
+                );
+            }
+        });
 
-  // ADD: Save proxy URL to localStorage
-  useEffect(() => {
-    localStorage.setItem('openaiProxyUrl', openaiProxyUrl);
-  }, [openaiProxyUrl]);
+        // Build prompt getters map (per-server)
+        const promptGetters = new Map();
+        connections.forEach(conn => {
+            if (conn.connected) {
+                promptGetters.set(conn.serverId, (name: string, args?: any) =>
+                    getPromptFromServer(conn.serverId, name, args)
+                );
+            }
+        });
 
-  useEffect(() => {
-    localStorage.setItem('oauthToken', oauthToken);
-  }, [oauthToken]);
-
-  useEffect(() => {
-    localStorage.setItem('oauthConfig', JSON.stringify(oauthConfig));
-  }, [oauthConfig]);
-
-  // Hooks
-  const {
-    mcpClient,
-    openaiClient,
-    tokenManager,
-    connected,
-    loading,
-    capabilities,
-    connect,
-    disconnect,
-    readResource,
-    getPrompt,
-    callTool
-  } = useMCP();
-
-  const {
-    messages,
-    currentMessage,
-    setCurrentMessage,
-    isProcessing,
-    sendMessage,
-    addSystemMessage,
-    clearMessages,
-    currentAttachments,
-    addAttachment,
-    removeAttachment
-  } = useChat();
-
-  // Add log entry helper
-  const addLogEntry = useCallback((entry: Omit<MCPLog, 'id' | 'timestamp'>) => {
-    const newLog: MCPLog = {
-      ...entry,
-      id: Date.now(),
-      timestamp: new Date(),
-    };
-    setLogs(prev => [newLog, ...prev.slice(0, 99)]);
-  }, []);
-
-  // Handlers
-  const handleConnect = useCallback(async () => {
-    try {
-      // Only require API key if NOT using proxy
-      if (!openaiProxyUrl && !openaiApiKey) {
-        throw new Error('Please provide OpenAI API Key or configure a Proxy Server URL');
-      }
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'connection',
-        status: 'pending',
-        operation: 'connect',
-        details: {
-          serverUrl: mcpServerUrl,
-          mcpEndpointPath: endpointSameAsBase ? 'same as base URL' : mcpEndpointPath,
-          endpointSameAsBase,
-          enablePortCheck,
-          enableHealthCheck,
-          enableCorsCheck,
-          oauthEnabled: oauthConfig.enabled,
-          oauthFlow: oauthConfig.flow,
-          model: selectedModel,
-          proxyUrl: openaiProxyUrl || 'direct',
-          apiKeyProvided: !!openaiApiKey, // Log whether key is provided
-          clientOrigin: window.location.origin
+        try {
+            await sendMessage(
+                openaiClient,
+                aggregatedCapabilities.tools,
+                routeToolCall,
+                resourceReaders,
+                promptGetters,
+                (toolName, args, result, serverId, serverName) => {
+                    addLogEntry({
+                        source: 'MCP',
+                        type: 'tool_call',
+                        status: result.error ? 'error' : 'success',
+                        operation: toolName,
+                        details: { ...args, serverId, serverName },
+                        response: result,
+                        serverId,
+                        serverName
+                    });
+                }
+            );
+        } catch (error) {
+            console.error('Send message error:', error);
+            addLogEntry({
+                source: 'LLM',
+                type: 'chat',
+                status: 'error',
+                operation: 'send-message',
+                details: {},
+                response: { error: error instanceof Error ? error.message : 'Unknown error' }
+            });
         }
-      });
+    }, [
+        openaiClient,
+        isAnyConnected,
+        connections,
+        sendMessage,
+        aggregatedCapabilities,
+        routeToolCall,
+        readResourceFromServer,
+        getPromptFromServer,
+        addLogEntry
+    ]);
 
-      // Pass proxy URL to connect
-      await connect(
-        mcpServerUrl,
-        mcpEndpointPath,
-        openaiApiKey,
-        selectedModel,
-        oauthConfig,
-        addLogEntry,
-        endpointSameAsBase,
-        enablePortCheck,
-        enableCorsCheck,
-        enableHealthCheck,
-        openaiProxyUrl // ADD THIS
-      );
+    // ============================================================================
+    // SERVER MANAGEMENT HANDLERS
+    // ============================================================================
 
-      addLogEntry({
-        source: 'MCP',
-        type: 'connection',
-        status: 'success',
-        operation: 'connect',
-        details: {
-          serverUrl: mcpServerUrl,
-          mcpEndpointPath: endpointSameAsBase ? 'same as base URL' : mcpEndpointPath,
-          endpointSameAsBase,
-          enablePortCheck,
-          enableHealthCheck,
-          enableCorsCheck,
-          oauthEnabled: oauthConfig.enabled,
-          oauthFlow: oauthConfig.flow,
-          model: selectedModel,
-          proxyUrl: openaiProxyUrl || 'direct',
-          clientOrigin: window.location.origin
-        },
-        response: {
-          tools: capabilities.tools.length,
-          resources: capabilities.resources.length,
-          resourceTemplates: capabilities.resourceTemplates.length,
-          prompts: capabilities.prompts.length,
-          portCheckPerformed: enablePortCheck,
-          corsCheckPerformed: enableCorsCheck,
-          healthCheckPerformed: enableHealthCheck
+    const handleAddServer = useCallback(() => {
+        console.log('➕ Opening dialog to add new server');
+        setEditingServer(null);
+        setShowServerDialog(true);
+    }, []);
+
+    const handleEditServer = useCallback((serverId: string) => {
+        console.log('🔧 handleEditServer called for:', serverId);
+        const server = servers.find(s => s.id === serverId);
+        if (server) {
+            console.log('📖 Loading server to edit:', {
+                id: server.id,
+                name: server.name,
+                oauth: server.oauth
+            });
+            setEditingServer(server);
+            setShowServerDialog(true);
+        } else {
+            console.error('❌ Server not found:', serverId);
         }
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Connection failed';
-      const isCorsError = (err as any)?.isCorsError || errorMessage.includes('CORS_ERROR');
-      const isConnectionRefused = (err as any)?.isConnectionRefused || errorMessage.includes('CONNECTION_REFUSED');
+    }, [servers]);
 
-      addLogEntry({
-        source: 'MCP',
-        type: 'connection',
-        status: 'error',
-        operation: 'connect',
-        details: {
-          serverUrl: mcpServerUrl,
-          mcpEndpointPath: endpointSameAsBase ? 'same as base URL' : mcpEndpointPath,
-          endpointSameAsBase,
-          enablePortCheck,
-          enableHealthCheck,
-          enableCorsCheck,
-          oauthEnabled: oauthConfig.enabled,
-          oauthFlow: oauthConfig.flow,
-          model: selectedModel,
-          proxyUrl: openaiProxyUrl || 'direct',
-          clientOrigin: window.location.origin,
-          isCorsError,
-          isConnectionRefused
-        },
-        response: {
-          error: errorMessage,
-          errorType: isCorsError ? 'CORS' : isConnectionRefused ? 'CONNECTION_REFUSED' : 'CONNECTION'
+    const handleDeleteServer = useCallback((serverId: string) => {
+        const server = servers.find(s => s.id === serverId);
+        if (!server) {
+            console.error('❌ Server not found:', serverId);
+            return;
         }
-      });
 
-      // CRITICAL: Re-throw to let ConfigTab handle the error display
-      throw err;
-    }
-  }, [connect, mcpServerUrl, mcpEndpointPath, endpointSameAsBase, enablePortCheck, enableCorsCheck, enableHealthCheck, openaiApiKey, selectedModel, openaiProxyUrl, oauthConfig, addLogEntry, capabilities]);
-
-  // Check if we're in an OAuth callback - ONLY RUN ONCE
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get('tab');
-
-    // Handle tab parameter changes
-    if (tabParam === 'config' || tabParam === 'capabilities') {
-      setActiveTab(tabParam as 'chat' | 'capabilities' | 'config');
-    }
-
-    // CRITICAL: Check for internal error flags first and handle them WITHOUT processing OAuth
-    const error = urlParams.get('error');
-
-    if (error === 'oauth_failed') {
-      console.log('⚠️ OAuth failed error detected - cleaning up URL');
-      window.history.replaceState({}, '', window.location.pathname + '?tab=config');
-      return; // Exit early, don't try to process as OAuth callback
-    }
-
-    if (error === 'oauth_scope_error') {
-      const invalidScopes = urlParams.get('invalid_scopes')?.split(',') || [];
-
-      console.log('⚠️ OAuth scope error detected - showing scope alert');
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'connection',
-        status: 'error',
-        operation: 'oauth-scope-validation',
-        details: {
-          flow: oauthConfig.flow,
-          configuredScope: oauthConfig.scope,
-          invalidScopes: invalidScopes
-        },
-        response: {
-          error: `Invalid OAuth scopes: ${invalidScopes.join(', ')}`,
-          suggestion: 'Use the Discovery feature to find valid scopes, or check your OAuth provider documentation'
+        if (!confirm(`Are you sure you want to delete "${server.name}"?\n\nThis action cannot be undone.`)) {
+            return;
         }
-      });
 
-      // Clean up URL immediately
-      window.history.replaceState({}, '', window.location.pathname + '?tab=config');
-      setActiveTab('config');
-      return; // Exit early, don't try to process as OAuth callback
-    }
+        console.log('🗑️ Deleting server:', server.name);
 
-    // Now handle actual OAuth callbacks (from the OAuth provider)
-    // Only process if we have a code AND OAuth is enabled AND we're not already processing
-    if (urlParams.has('code') &&
-      oauthConfig.enabled &&
-      (oauthConfig.flow === 'authorization_code' || oauthConfig.flow === 'authorization_code_pkce') &&
-      !isProcessingOAuth.current &&
-      !connected &&
-      !loading) {
+        // Disconnect if connected (this will also abort any ongoing connection)
+        const conn = getConnection(serverId);
+        if (conn?.connected || conn?.loading) {
+            console.log('🔌 Disconnecting/aborting before delete...');
+            disconnectServer(serverId);
+        }
 
-      console.log('✅ Valid OAuth callback detected, starting processing...');
-      console.log('OAuth callback params:', {
-        code: urlParams.get('code')?.substring(0, 10) + '...',
-        state: urlParams.get('state'),
-        hasError: urlParams.has('error'),
-        flow: oauthConfig.flow
-      });
+        // Remove server configuration
+        removeServer(serverId);
 
-      // Set processing flag IMMEDIATELY to prevent double-processing
-      isProcessingOAuth.current = true;
-      setActiveTab('config');
+        console.log('✅ Server deleted successfully');
+    }, [servers, getConnection, disconnectServer, removeServer]);
 
-      console.log('🔄 Triggering connection for OAuth callback...');
-      handleConnect()
-        .then(() => {
-          console.log('✅ Connection completed after OAuth callback');
+    const handleSaveServer = useCallback((config: Omit<ServerConfig, 'id'>) => {
+        console.log('💾💾💾 handleSaveServer START 💾💾💾');
+        console.log('Is editing?', !!editingServer);
+        console.log('Config OAuth enabled?', config.oauth?.enabled);
+        console.log('Config OAuth flow?', config.oauth?.flow);
 
-          // CRITICAL FIX: Use setTimeout to delay URL cleanup
-          // This prevents triggering a re-render during the connection process
-          setTimeout(() => {
-            // Clean up URL after successful connection
-            window.history.replaceState({}, '', window.location.pathname + '?tab=config');
+        // Capture values BEFORE clearing state
+        const serverIdToUpdate = editingServer?.id;
+        const isEditing = !!serverIdToUpdate;
 
-            console.log('Checking post-connection auth state:', {
-              hasTokenManager: !!tokenManager,
-              isValid: tokenManager?.isTokenValid(),
-              tokenInfo: tokenManager?.getTokenInfo()
+        // Close dialog immediately
+        console.log('🚪 Closing dialog...');
+        setShowServerDialog(false);
+        setEditingServer(null);
+
+        // Perform save operation
+        if (isEditing && serverIdToUpdate) {
+            console.log('✏️ Updating existing server:', serverIdToUpdate);
+            console.log('📦 Full config:', JSON.stringify(config, null, 2));
+
+            updateServer(serverIdToUpdate, config);
+
+            console.log('✅ Server updated successfully');
+        } else {
+            console.log('➕ Adding new server');
+            const newServerId = addServer(config);
+            console.log('✅ Added with ID:', newServerId);
+        }
+
+        console.log('💾💾💾 handleSaveServer END 💾💾💾');
+    }, [editingServer, addServer, updateServer]);
+
+    const handleConnectServer = useCallback(async (serverId: string) => {
+        const server = servers.find(s => s.id === serverId);
+        if (!server) {
+            console.error('Server not found:', serverId);
+            return;
+        }
+
+        // If OAuth is enabled, store the server ID for after redirect
+        if (server.oauth.enabled) {
+            console.log('🔵 Storing server ID for OAuth callback:', serverId);
+            sessionStorage.setItem('oauth_server_id', serverId);
+        }
+
+        try {
+            // Clear any previous error
+            setConnectionError(null);
+
+            // Pass the proxy URL to connectToServer
+            await connectToServer(serverId, openaiApiKey, selectedModel, addLogEntry, openaiProxyUrl);
+        } catch (error) {
+            // Ignore aborted connections (user canceled intentionally)
+            if ((error as Error).message?.includes('aborted')) {
+                console.log('🛑 Connection aborted by user:', server.name);
+                return;
+            }
+
+            console.error('Connection failed for server:', server.name, error);
+
+            // Determine the server URL for error display
+            let serverUrl: string;
+            if (server.endpointSameAsBase) {
+                serverUrl = server.baseUrl;
+            } else {
+                serverUrl = `${server.baseUrl}${server.endpointPath}`;
+            }
+
+            // Get test results from the connection if available
+            const connection = getConnection(serverId);
+            const testResults = (error as any).testResults;
+
+            // Show error modal
+            setConnectionError({
+                error: error as Error,
+                serverName: server.name,
+                serverUrl: serverUrl,
+                testResults: testResults
             });
 
-            // Reset processing flag after everything is settled
-            isProcessingOAuth.current = false;
-          }, 2000); // Wait 2 seconds for state to fully settle
-        })
-        .catch((error) => {
-          console.error('❌ Connection failed after OAuth callback:', error);
-
-          // Clean up URL to prevent re-processing the error
-          window.history.replaceState({}, '', window.location.pathname + '?tab=config');
-
-          // Reset processing flag immediately on error
-          isProcessingOAuth.current = false;
-        });
-    }
-  }, []); // CRITICAL: Empty dependency array - only run once on mount!
-
-  const handleDisconnect = useCallback((performOAuthLogout = false) => {
-    disconnect(performOAuthLogout);
-    clearMessages();
-
-    addLogEntry({
-      source: 'MCP',
-      type: 'connection',
-      status: 'success',
-      operation: performOAuthLogout ? 'oauth-logout' : 'disconnect',
-      details: {
-        oauthLogout: performOAuthLogout,
-        flow: oauthConfig.flow
-      },
-      response: { success: true }
-    });
-  }, [disconnect, clearMessages, addLogEntry, oauthConfig.flow]);
-
-  const handleSendMessage = useCallback(async () => {
-    if (!mcpClient || !openaiClient) return;
-
-    try {
-      await sendMessage(mcpClient, openaiClient, capabilities.tools, (toolName, args, result) => {
-        addLogEntry({
-          source: 'MCP',
-          type: 'tool_call',
-          status: result.error ? 'error' : 'success',
-          operation: toolName,
-          details: args,
-          response: result
-        });
-      });
-    } catch (err) {
-      console.error('Send message error:', err);
-    }
-  }, [sendMessage, mcpClient, openaiClient, capabilities.tools, addLogEntry]);
-
-  const handleResourceRead = useCallback(async (resource: MCPResource) => {
-    try {
-      addLogEntry({
-        source: 'MCP',
-        type: 'resource_read',
-        status: 'pending',
-        operation: resource.name,
-        details: { uri: resource.uri }
-      });
-
-      const result = await readResource(resource.uri);
-
-      if (result.content) {
-        addLogEntry({
-          source: 'MCP',
-          type: 'resource_read',
-          status: 'success',
-          operation: resource.name,
-          details: { uri: resource.uri },
-          response: {
-            size: `${(result.content.length / 1024).toFixed(1)}kb`,
-            contentType: resource.mimeType
-          }
-        });
-
-        addSystemMessage(`Resource "${resource.name}" loaded: ${result.content.substring(0, 200)}${result.content.length > 200 ? '...' : ''}`);
-        setCurrentMessage(prev =>
-          prev + (prev ? '\n\n' : '') + `Help me understand this resource: "${resource.name}"`
-        );
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to read resource';
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'resource_read',
-        status: 'error',
-        operation: resource.name,
-        details: { uri: resource.uri },
-        response: { error: errorMessage }
-      });
-    }
-  }, [readResource, addSystemMessage, setCurrentMessage, addLogEntry]);
-
-  const handleResourceTemplateUse = useCallback(async (template: MCPResourceTemplate, params?: any) => {
-    try {
-      addLogEntry({
-        source: 'MCP',
-        type: 'resource_read',
-        status: 'pending',
-        operation: template.name,
-        details: { template: template.uriTemplate, params }
-      });
-
-      let uri = template.uriTemplate;
-      if (params) {
-        Object.entries(params).forEach(([key, value]) => {
-          uri = uri.replace(`{${key}}`, String(value));
-        });
-      }
-
-      const result = await readResource(uri);
-
-      if (result.content) {
-        addLogEntry({
-          source: 'MCP',
-          type: 'resource_read',
-          status: 'success',
-          operation: template.name,
-          details: { template: template.uriTemplate, params, resolvedUri: uri },
-          response: {
-            size: `${(result.content.length / 1024).toFixed(1)}kb`,
-            contentType: 'unknown'
-          }
-        });
-
-        addSystemMessage(`Resource template "${template.name}" loaded from ${uri}: ${result.content.substring(0, 200)}${result.content.length > 200 ? '...' : ''}`);
-        setCurrentMessage(prev =>
-          prev + (prev ? '\n\n' : '') + `Help me understand this resource from template: "${template.name}"`
-        );
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to read resource template';
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'resource_read',
-        status: 'error',
-        operation: template.name,
-        details: { template: template.uriTemplate, params },
-        response: { error: errorMessage }
-      });
-    }
-  }, [readResource, addSystemMessage, setCurrentMessage, addLogEntry]);
-
-  const handlePromptUse = useCallback(async (prompt: MCPPrompt) => {
-    try {
-      addLogEntry({
-        source: 'MCP',
-        type: 'prompt_get',
-        status: 'pending',
-        operation: prompt.name,
-        details: { arguments: {} }
-      });
-
-      const result = await getPrompt(prompt.name, {});
-
-      if (result.messages && result.messages.length > 0) {
-        const content = result.messages
-          .map((msg: any) => {
-            if (msg.content && msg.content.text) return msg.content.text;
-            if (typeof msg.content === 'string') return msg.content;
-            return JSON.stringify(msg.content || msg, null, 2);
-          })
-          .join('\n\n');
-
-        addLogEntry({
-          source: 'MCP',
-          type: 'prompt_get',
-          status: 'success',
-          operation: prompt.name,
-          details: { arguments: {} },
-          response: {
-            messages: result.messages.length,
-            tokens: content.length
-          }
-        });
-
-        setCurrentMessage(content);
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to use prompt';
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'prompt_get',
-        status: 'error',
-        operation: prompt.name,
-        details: { arguments: {} },
-        response: { error: errorMessage }
-      });
-    }
-  }, [getPrompt, setCurrentMessage, addLogEntry]);
-
-  const handleToolCall = useCallback(async (tool: MCPTool, args: any) => {
-    if (!mcpClient) {
-      throw new Error('MCP client not connected');
-    }
-
-    try {
-      addLogEntry({
-        source: 'MCP',
-        type: 'tool_call',
-        status: 'pending',
-        operation: tool.name,
-        details: args
-      });
-
-      const result = await callTool(tool.name, args);
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'tool_call',
-        status: 'success',
-        operation: tool.name,
-        details: args,
-        response: {
-          contentLength: result.content?.length || 0,
-          isError: result.isError || false
+            addLogEntry({
+                source: 'MCP',
+                type: 'connection',
+                status: 'error',
+                operation: 'connect',
+                details: { serverId, serverName: server.name },
+                response: { error: error instanceof Error ? error.message : 'Unknown error' },
+                serverId,
+                serverName: server.name
+            });
         }
-      });
+    }, [servers, connectToServer, openaiApiKey, selectedModel, addLogEntry, getConnection, openaiProxyUrl]);
 
-      const content = result.content
-        ?.map((c: any) => {
-          if (c.type === 'text') return c.text;
-          if (c.text) return c.text;
-          if (c.blob) return `[Binary content: ${c.blob.substring(0, 100)}...]`;
-          return JSON.stringify(c, null, 2);
-        })
-        .join('\n') || JSON.stringify(result, null, 2);
-
-      addSystemMessage(`Tool "${tool.name}" result:\n${content}`);
-
-      return result;
-    } catch (err) {
-      throw err;
-    }
-  }, [mcpClient, callTool, addLogEntry, addSystemMessage]);
-
-  const handleToolCallForCapabilities = useCallback(async (tool: MCPTool, args: any) => {
-    if (!mcpClient) {
-      throw new Error('MCP client not connected');
-    }
-
-    try {
-      addLogEntry({
-        source: 'MCP',
-        type: 'tool_call',
-        status: 'pending',
-        operation: tool.name,
-        details: args
-      });
-
-      const result = await callTool(tool.name, args);
-
-      const formatToolResult = (result: any): string => {
-        if (result.structuredContent) {
-          return JSON.stringify(result.structuredContent, null, 2);
+    const handleAbortConnection = useCallback((serverId: string) => {
+        const server = servers.find(s => s.id === serverId);
+        if (server) {
+            console.log('🛑 Aborting connection for:', server.name);
+            abortConnection(serverId);
         }
+    }, [servers, abortConnection]);
 
-        if (result.result && Array.isArray(result.result)) {
-          const items = result.result.map((item: any, index: number) => {
-            return `${index + 1}. ${JSON.stringify(item, null, 2)}`;
-          }).join('\n\n');
+    const handleClearServerError = useCallback((serverId: string) => {
+        console.log('🧹 Clearing error for server:', serverId);
+        clearServerError(serverId);
+    }, [clearServerError]);
 
-          return `Found ${result.result.length} items:\n\n${items}`;
-        }
+    // ============================================================================
+    // RENDER
+    // ============================================================================
 
-        return JSON.stringify(result, null, 2);
-      };
-
-      const resultContent = formatToolResult(result);
-
-      addLogEntry({
-        source: 'MCP',
-        type: 'tool_call',
-        status: 'success',
-        operation: tool.name,
-        details: args,
-        response: {
-          contentLength: result.content?.length || 0,
-          isError: result.isError || false,
-          result: resultContent
-        }
-      });
-
-      return {
-        ...result,
-        result: resultContent
-      };
-    } catch (err) {
-      addLogEntry({
-        source: 'MCP',
-        type: 'tool_call',
-        status: 'error',
-        operation: tool.name,
-        details: args,
-        response: { error: err instanceof Error ? err.message : 'Unknown error' }
-      });
-      throw err;
-    }
-  }, [mcpClient, callTool, addLogEntry]);
-
-  // Get user permissions for display
-  const userPermissions = tokenManager?.getUserPermissions() || { canRead: false, canWrite: false };
-  const isAuthenticated = tokenManager?.isTokenValid() || false;
-  const userInfo = tokenManager?.getUserInfo();
-
-  // Mock stats for demonstration
-  const stats = {
-    uptime: 7200,
-    active_connections: connected ? 1 : 0,
-    error_rate: 1.2
-  };
-
-  return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="tab-header flex items-center justify-between px-6 py-3 h-16">
-        <div className="flex items-center space-x-4">
-          <div className="logo-container p-2 rounded-md">
-            <BrutorLogo size="medium" />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-blue-900">MCP Workbench</h1>
-            <p className="text-sm text-blue-700">Interactive MCP client and testing environment</p>
-          </div>
-        </div>
-
-        {/* Connection Status and User Info */}
-        <div className="flex items-center space-x-4">
-          {/* User Info (only show if authenticated) */}
-          {isAuthenticated && userInfo && (
-            <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 rounded-md">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                  <User className="w-3 h-3 text-blue-600" />
+    return (
+        <div className="h-screen flex flex-col bg-gray-50">
+            {/* Header */}
+            <div className="flex items-center justify-between bg-gradient-to-r from-primary-500 to-sky-500 text-white shadow-md relative">
+                {/* Left side - Logo */}
+                <div className="flex items-center ml-8">
+                    <BrutorLogo size="medium" showText={false} />
                 </div>
-                <div className="text-sm">
-                  <div className="font-medium text-blue-900">{userInfo.preferred_username || userInfo.name || 'User'}</div>
-                  <div className="text-xs text-blue-600 flex items-center space-x-1">
-                    <Shield className="w-2 h-2" />
-                    <span>{userPermissions.canWrite ? 'Writer' : userPermissions.canRead ? 'Reader' : 'No Access'}</span>
-                  </div>
+
+                {/* Center - Title */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 text-center">
+                    <h1 className="text-lg font-semibold">Brutor MCP Workbench</h1>
+                    <p className="text-sm opacity-90">Multi-Server Client</p>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Connection Status */}
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${
-              connected ? 'bg-green-400' : 'bg-gray-400'
-            }`}></div>
-            <span className="text-sm font-medium text-blue-900">
-              {connected ? 'MCP Connected' : 'Disconnected'}
-            </span>
-          </div>
-          <div className="text-xs text-blue-700">
-            {connected ? `${stats.active_connections} connection` : 'No connections'}
-          </div>
-          <div className="text-xs text-blue-700">
-            Model: {selectedModel.toUpperCase()}
-          </div>
-          {/* ADD: Show proxy status */}
-          {openaiProxyUrl && (
-            <div className="text-xs text-purple-700">
-              Proxy ✓
+                {/* Right side - Connection Status */}
+                <div className="flex items-center space-x-4 mr-4">
+                    <div className="flex items-center space-x-2">
+                        <div className={`w-2 h-2 rounded-full ${isAnyConnected ? 'bg-green-300' : 'bg-gray-300'}`} />
+                        <span className="text-sm font-medium">
+                            {connectedCount} / {servers.length} Connected
+                        </span>
+                    </div>
+                    {aggregatedCapabilities.serverCount > 0 && (
+                        <div className="text-xs opacity-90">
+                            {aggregatedCapabilities.tools.length} tools •{' '}
+                            {aggregatedCapabilities.resources.length} resources •{' '}
+                            {aggregatedCapabilities.prompts.length} prompts
+                        </div>
+                    )}
+                </div>
             </div>
-          )}
-          {enablePortCheck && (
-            <div className="text-xs text-blue-700">
-              Port ✓
-            </div>
-          )}
-          {enableCorsCheck && (
-            <div className="text-xs text-blue-700">
-              CORS ✓
-            </div>
-          )}
-          {enableHealthCheck && (
-            <div className="text-xs text-blue-700">
-              Health ✓
-            </div>
-          )}
-          {loading && (
-            <div className="flex items-center space-x-1 text-xs text-blue-600">
-              <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
-              <span>Connecting...</span>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-blue-200 bg-sky-100">
-        {[
-          { id: 'chat', label: 'Chat (test MCP server with LLM)', icon: MessageSquare },
-          {
-            id: 'capabilities',
-            label: 'Capabilities (test MCP server by itself)',
-            icon: Activity,
-            badge: connected ?
-              (capabilities.tools.length + capabilities.resources.length + capabilities.resourceTemplates.length + capabilities.prompts.length)
-              : null
-          },
-          { id: 'config', label: 'Configure & Connect', icon: Settings },
-        ].map(({ id, label, icon: Icon, badge }) => (
-          <button
-            key={id}
-            onClick={() => setActiveTab(id as any)}
-            className={`tab-button flex items-center space-x-2 px-6 py-2 ${
-              activeTab === id ? 'active' : ''
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{label}</span>
-            {badge && badge > 0 && (
-              <span className="text-xs ml-1 text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
-                {badge}
-              </span>
+            {/* Navigation Tabs */}
+            <div className="flex border-b border-sky-border bg-sky-100">
+                {/* Left-aligned tabs */}
+                <div className="flex">
+                    {[
+                        { id: 'chat', label: 'Chat (MCPs + LLM)', icon: MessageSquare },
+                        { id: 'context', label: 'Context', icon: Database },
+                        {
+                            id: 'capabilities',
+                            label: 'Capabilities Testing (only MCPs)',
+                            icon: FlaskConical,
+                            badge: aggregatedCapabilities.tools.length +
+                                aggregatedCapabilities.resources.length +
+                                aggregatedCapabilities.prompts.length
+                        },
+                        { id: 'configure', label: 'OpenAI Configuration', icon: Zap },
+                        { id: 'servers', label: 'Define Servers & Connect', icon: Server, badge: servers.length }
+                    ].map(({ id, label, icon: Icon, badge }) => {
+                        const tabId = id as 'chat' | 'context' | 'capabilities' | 'servers' | 'configure' | 'logs';
+                        const isActive = activeTab === tabId;
+
+                        return (
+                            <button
+                                key={id}
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setActiveTab(tabId);
+                                }}
+                                style={{
+                                    position: 'relative',
+                                    zIndex: 10,
+                                    pointerEvents: 'auto'
+                                }}
+                                className={`flex items-center space-x-2 px-6 py-3 border-b-2 transition-colors ${
+                                    isActive
+                                        ? 'border-primary-500 text-primary-600 bg-primary-50'
+                                        : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                }`}
+                            >
+                                <Icon className="w-4 h-4" />
+                                <span className="font-medium">{label}</span>
+                                {badge !== undefined && badge > 0 && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-800">
+                                        {badge}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Spacer to push Logs to the right */}
+                <div className="flex-1"></div>
+
+                {/* Right-aligned Logs tab */}
+                {(() => {
+                    const isActive = activeTab === 'logs';
+                    return (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setActiveTab('logs');
+                            }}
+                            style={{
+                                position: 'relative',
+                                zIndex: 10,
+                                pointerEvents: 'auto'
+                            }}
+                            className={`flex items-center space-x-2 px-6 py-3 border-b-2 transition-colors ${
+                                isActive
+                                    ? 'border-primary-500 text-primary-600 bg-primary-50'
+                                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                            }`}
+                        >
+                            <FileText className="w-4 h-4" />
+                            <span className="font-medium">Logs</span>
+                            {logStats.total > 0 && (
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    logStats.errors > 0
+                                        ? 'bg-red-100 text-red-800'
+                                        : 'bg-primary-100 text-primary-800'
+                                }`}>
+                                    {logStats.total}
+                                    {logStats.errors > 0 && (
+                                        <span className="ml-1">({logStats.errors} err)</span>
+                                    )}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })()}
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 overflow-hidden">
+                {/* CHAT TAB */}
+                {activeTab === 'chat' && (
+                    <ChatTab
+                        messages={messages}
+                        currentMessage={currentMessage}
+                        onMessageChange={setCurrentMessage}
+                        onSendMessage={handleSendMessage}
+                        connected={isAnyConnected}
+                        isProcessing={isProcessing}
+                        capabilities={aggregatedCapabilities}
+                        onResourceRead={async (resource) => {
+                            await readResourceFromServer(resource.serverId, resource.uri);
+                        }}
+                        onPromptUse={async (prompt, args) => {
+                            await getPromptFromServer(prompt.serverId, prompt.name, args);
+                        }}
+                        onResourceTemplateUse={async (template, params) => {
+                            let uri = template.uriTemplate;
+                            Object.entries(params).forEach(([key, value]) => {
+                                uri = uri.replace(`{${key}}`, String(value));
+                            });
+                            await readResourceFromServer(template.serverId, uri);
+                        }}
+                        currentAttachments={currentAttachments}
+                        onAddAttachment={addAttachment}
+                        onRemoveAttachment={removeAttachment}
+                    />
+                )}
+
+                {/* CONTEXT TAB */}
+                {activeTab === 'context' && (
+                    <div className="h-full">
+                        <ContextTab
+                            messages={messages}
+                            capabilities={aggregatedCapabilities}
+                            onRemoveMessage={removeMessage}
+                            onClearAllMessages={clearMessages}
+                            onRemoveAttachment={removeAttachmentFromMessage}
+                        />
+                    </div>
+                )}
+
+                {/* CAPABILITIES TAB */}
+                {activeTab === 'capabilities' && (
+                    <CapabilitiesTab
+                        connected={isAnyConnected}
+                        capabilities={aggregatedCapabilities}
+                        onResourceRead={async (resource) => {
+                            await readResourceFromServer(resource.serverId, resource.uri);
+                        }}
+                        onPromptUse={async (prompt, args) => {
+                            await getPromptFromServer(prompt.serverId, prompt.name, args);
+                        }}
+                        onToolCall={async (tool, args) => {
+                            const result = await routeToolCall(tool.name, args);
+                            return result.result;
+                        }}
+                        onResourceTemplateUse={async (template, params) => {
+                            let uri = template.uriTemplate;
+                            Object.entries(params).forEach(([key, value]) => {
+                                uri = uri.replace(`{${key}}`, String(value));
+                            });
+                            await readResourceFromServer(template.serverId, uri);
+                        }}
+                        readResourceFromServer={readResourceFromServer}
+                        getPromptFromServer={getPromptFromServer}
+                    />
+                )}
+
+                {/* SERVERS TAB */}
+                {activeTab === 'servers' && (
+                    <div className="h-full">
+                        <ServersTab
+                            servers={servers}
+                            serverStates={serverStates}
+                            onAddServer={handleAddServer}
+                            onEditServer={handleEditServer}
+                            onDeleteServer={handleDeleteServer}
+                            onConnectServer={handleConnectServer}
+                            onDisconnectServer={(id) => disconnectServer(id)}
+                            onAbortConnection={handleAbortConnection}
+                            onClearServerError={handleClearServerError}
+                        />
+                    </div>
+                )}
+
+                {/* CONFIGURE TAB */}
+                {activeTab === 'configure' && (
+                    <div className="h-full overflow-y-auto p-6">
+                        <div className="mb-6">
+                            <h2 className="text-lg font-semibold mb-2">OpenAI Configuration</h2>
+                            <p className="text-sm text-gray-600">
+                                Configure your OpenAI API key and model preferences. These settings apply to all MCP servers.
+                            </p>
+                        </div>
+
+                        <OpenAITab
+                            openaiApiKey={openaiApiKey}
+                            onOpenaiApiKeyChange={setOpenaiApiKey}
+                            selectedModel={selectedModel}
+                            onSelectedModelChange={setSelectedModel}
+                            proxyUrl={openaiProxyUrl}
+                            onProxyUrlChange={setOpenaiProxyUrl}
+                            disabled={false}
+                        />
+                    </div>
+                )}
+
+                {/* LOGS TAB */}
+                {activeTab === 'logs' && (
+                    <div className="h-full">
+                        <LogsPanel
+                            logs={logs}
+                            onClearLogs={() => setLogs([])}
+                            servers={servers}
+                        />
+                    </div>
+                )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-2 flex items-center justify-between bg-gradient-to-r from-primary-500 to-sky-500 text-white shadow-md relative">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                        <span>Brutor MCP Workbench v0.1.0 (Multi-Server)</span>
+                        <span>•</span>
+                        <span>{servers.length} configured</span>
+                        <span>•</span>
+                        <span>{connectedCount} connected</span>
+                        {aggregatedCapabilities.serverCount > 0 && (
+                            <>
+                                <span>•</span>
+                                <span>
+                                    {aggregatedCapabilities.tools.length +
+                                        aggregatedCapabilities.resources.length +
+                                        aggregatedCapabilities.prompts.length} total capabilities
+                                </span>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Server Configuration Dialog */}
+            {showServerDialog && (
+                <ServerConfigDialog
+                    server={editingServer}
+                    onSave={handleSaveServer}
+                    onClose={() => {
+                        setShowServerDialog(false);
+                        setEditingServer(null);
+                    }}
+                />
             )}
-            {id === 'config' && (
-              <span className={`text-xs ml-1 ${connected ? 'text-green-600' : 'text-red-600'}`}>
-                {connected ? '●' : '○'}
-              </span>
+
+            {/* Connection Error Modal */}
+            {connectionError && (
+                <ConnectionErrorModal
+                    error={connectionError.error}
+                    onClose={() => setConnectionError(null)}
+                    mcpEndpointPath={undefined}
+                    serverBaseUrl={connectionError.serverUrl}
+                />
             )}
-          </button>
-        ))}
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden flex">
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === 'chat' ? (
-            <ChatTab
-              messages={messages}
-              currentMessage={currentMessage}
-              onMessageChange={setCurrentMessage}
-              onSendMessage={handleSendMessage}
-              connected={connected}
-              isProcessing={isProcessing}
-              capabilities={capabilities}
-              onResourceRead={handleResourceRead}
-              onPromptUse={handlePromptUse}
-              onResourceTemplateUse={handleResourceTemplateUse}
-              currentAttachments={currentAttachments}
-              onAddAttachment={addAttachment}
-              onRemoveAttachment={removeAttachment}
-            />
-          ) : activeTab === 'capabilities' ? (
-            <CapabilitiesTab
-              connected={connected}
-              capabilities={capabilities}
-              onResourceRead={handleResourceRead}
-              onPromptUse={handlePromptUse}
-              onToolCall={handleToolCallForCapabilities}
-              onResourceTemplateUse={handleResourceTemplateUse}
-              readResource={readResource}
-              mcpClient={mcpClient}
-              getPrompt={getPrompt}
-            />
-          ) : (
-            <ConfigTab
-              serverBaseUrl={mcpServerUrl}
-              onServerBaseUrlChange={setMcpServerUrl}
-              mcpEndpointPath={mcpEndpointPath}
-              onMcpEndpointPathChange={setMcpEndpointPath}
-              endpointSameAsBase={endpointSameAsBase}
-              onEndpointSameAsBaseChange={setEndpointSameAsBase}
-              openaiApiKey={openaiApiKey}
-              onOpenaiApiKeyChange={setOpenaiApiKey}
-              selectedModel={selectedModel}
-              onSelectedModelChange={setSelectedModel}
-              openaiProxyUrl={openaiProxyUrl} // ADD THIS
-              onOpenaiProxyUrlChange={setOpenaiProxyUrl} // ADD THIS
-              oauthToken={oauthToken}
-              onOauthTokenChange={setOauthToken}
-              oauthConfig={oauthConfig}
-              onOauthConfigChange={setOauthConfig}
-              connected={connected}
-              loading={loading}
-              capabilities={capabilities}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-              tokenManager={tokenManager}
-              enablePortCheck={enablePortCheck}
-              onEnablePortCheckChange={setEnablePortCheck}
-              enableHealthCheck={enableHealthCheck}
-              onEnableHealthCheckChange={setEnableHealthCheck}
-              enableCorsCheck={enableCorsCheck}
-              onEnableCorsCheckChange={setEnableCorsCheck}
-              onLogEntry={addLogEntry}
-            />
-          )}
-        </div>
-
-        {/* Right Panel - Logs */}
-        <div className="w-96 border-l">
-          <LogsPanel
-            logs={logs}
-            onClearLogs={() => setLogs([])}
-          />
-        </div>
-      </div>
-
-      {/* Footer */}
-      <div className="footer px-6 py-2 border-t border-blue-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4 text-xs">
-            <span className="status-text">Workbench v1.0.0</span>
-            <span className="status-text">
-              Uptime: {Math.floor(stats.uptime / 3600)}h {Math.floor((stats.uptime % 3600) / 60)}m
-            </span>
-            <span className="status-text">
-              {capabilities.tools.length + capabilities.resources.length + capabilities.prompts.length} capabilities
-            </span>
-            <span className="status-text">
-              Model: {selectedModel}
-            </span>
-            {openaiProxyUrl && (
-              <span className="status-text text-purple-600">
-                Proxy: {new URL(openaiProxyUrl).hostname}
-              </span>
+            {/* Token Expired Modal */}
+            {tokenExpiredServer && (
+                <TokenExpiredModal
+                    serverName={tokenExpiredServer.serverName}
+                    serverId={tokenExpiredServer.serverId}
+                    onReconnect={() => {
+                        setTokenExpiredServer(null);
+                        handleConnectServer(tokenExpiredServer.serverId);
+                    }}
+                    onDisconnect={() => {
+                        setTokenExpiredServer(null);
+                        disconnectServer(tokenExpiredServer.serverId);
+                    }}
+                    onClose={() => setTokenExpiredServer(null)}
+                />
             )}
-            {isAuthenticated && userInfo && (
-              <span className="status-text">
-                User: {userInfo.preferred_username || userInfo.name || 'User'}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center space-x-2 text-xs">
-            <span className="status-text">
-              Error rate: {stats.error_rate}%
-            </span>
-            <div className={`w-2 h-2 rounded-full ${
-              stats.error_rate < 5 ? 'bg-green-400' : 'bg-yellow-400'
-            }`}></div>
-          </div>
         </div>
-      </div>
-    </div>
-  );
-};
-
-const App: React.FC = () => {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/callback" element={<OAuthCallback />} />
-        <Route path="/*" element={<MainApp />} />
-      </Routes>
-    </Router>
-  );
+    );
 };
 
 export default App;

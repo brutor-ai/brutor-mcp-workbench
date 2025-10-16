@@ -15,9 +15,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, CheckCircle, AlertCircle, User, LogOut, Loader2, Play, Server, Shield } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, AlertCircle, User, LogOut, Loader2, Play, Server, Shield, CheckCircle2, XCircle } from 'lucide-react';
 import { OAuthConfig } from '../../types';
-import { ScopeErrorAlert } from './ScopeErrorAlert';
+import { ScopeErrorAlert } from './ScopeErrorAlert.tsx';
 
 export interface OAuthConfigProps {
     config: OAuthConfig;
@@ -148,7 +148,7 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
 
         console.log('Starting OAuth discovery process...');
         setIsDiscovering(true);
-        setScopeError(null); // Clear any previous scope errors
+        setScopeError(null);
 
         const mcpUrl = serverUrl.replace(/\/+$/, '');
 
@@ -384,13 +384,13 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
 
     const getStepIcon = (step: DiscoveryStep) => {
         switch (step.status) {
-            case 'loading': return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
-            case 'success': return <CheckCircle className="w-4 h-4 text-green-500" />;
-            case 'error': return <AlertCircle className="w-4 h-4 text-red-500" />;
+            case 'loading': return <Loader2 className="w-4 h-4 animate-spin text-sky-500" />;
+            case 'success': return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+            case 'error': return <XCircle className="w-4 h-4 text-red-500" />;
             default:
                 switch (step.id) {
-                    case 'mcp-endpoint': return <Server className="w-4 h-4 text-purple-400" />;
-                    case 'resource': return <Server className="w-4 h-4 text-blue-400" />;
+                    case 'mcp-endpoint': return <Server className="w-4 h-4 text-green-400" />;
+                    case 'resource': return <Server className="w-4 h-4 text-sky-400" />;
                     case 'authserver': return <Shield className="w-4 h-4 text-gray-400" />;
                     default: return <Server className="w-4 h-4 text-gray-400" />;
                 }
@@ -406,51 +406,62 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
         const roles = tokenInfo?.roles || [];
 
         return (
-            <div className="card mb-4">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-small font-medium">User Information</h3>
-                    <button
-                        onClick={handleLogout}
-                        className="btn-outline btn-small"
-                        title="Logout"
-                    >
-                        <LogOut className="w-3 h-3" />
-                        Logout
-                    </button>
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div className="bg-gradient-to-r from-green-50 to-emerald-100 px-6 py-3 border-b border-green-200">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-green-900">User Information</h3>
+                        <button
+                            onClick={handleLogout}
+                            className="px-3 py-1.5 text-xs bg-white hover:bg-red-50 text-red-700 border border-red-200 rounded-md transition-colors flex items-center space-x-1.5 font-medium"
+                            title="Logout"
+                        >
+                            <LogOut className="w-3 h-3" />
+                            <span>Logout</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                        <User className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm font-medium">
-                            {userInfo?.preferred_username || userInfo?.login || userInfo?.email || 'Unknown User'}
-                        </span>
+                <div className="p-6 space-y-4">
+                    <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-sky-600 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1">
+                            <div className="text-sm font-semibold text-gray-900">
+                                {userInfo?.preferred_username || userInfo?.login || userInfo?.email || 'Unknown User'}
+                            </div>
+                            {userInfo?.email && (
+                                <div className="text-xs text-gray-600 mt-0.5">
+                                    {userInfo.email}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    {userInfo?.email && (
-                        <div className="text-xs text-gray-600">
-                            Email: {userInfo.email}
-                        </div>
-                    )}
-
-                    <div className="mt-3">
-                        <div className="text-xs font-medium text-gray-700 mb-1">Permissions:</div>
-                        <div className="flex space-x-4 text-xs">
-                            <span className={userPermissions.canRead ? 'status-connected' : 'text-muted'}>
-                                Read: {userPermissions.canRead ? '[OK]' : '[ ]'}
-                            </span>
-                            <span className={userPermissions.canWrite ? 'status-connected' : 'text-muted'}>
-                                Write: {userPermissions.canWrite ? '[OK]' : '[ ]'}
-                            </span>
+                    <div className="pt-3 border-t border-gray-200">
+                        <div className="text-xs font-semibold text-gray-700 mb-2">Permissions</div>
+                        <div className="flex space-x-4">
+                            <div className={`flex items-center space-x-1.5 text-xs ${
+                                userPermissions.canRead ? 'text-green-700' : 'text-gray-400'
+                            }`}>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>Read</span>
+                            </div>
+                            <div className={`flex items-center space-x-1.5 text-xs ${
+                                userPermissions.canWrite ? 'text-green-700' : 'text-gray-400'
+                            }`}>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>Write</span>
+                            </div>
                         </div>
                     </div>
 
                     {roles.length > 0 && (
-                        <div className="mt-3">
-                            <div className="text-xs font-medium text-gray-700 mb-1">Roles:</div>
-                            <div className="flex flex-wrap gap-1">
+                        <div className="pt-3 border-t border-gray-200">
+                            <div className="text-xs font-semibold text-gray-700 mb-2">Roles</div>
+                            <div className="flex flex-wrap gap-1.5">
                                 {roles.map(role => (
-                                    <span key={role} className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                                    <span key={role} className="text-xs bg-sky-100 text-sky-800 px-2 py-1 rounded-md font-medium">
                                         {role}
                                     </span>
                                 ))}
@@ -463,63 +474,72 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
     };
 
     const renderConfigPanel = () => (
-        <div className="card">
-            <div className="flex items-center justify-between mb-3">
-                <h3 className="text-small font-medium">OAuth Configuration</h3>
-                <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={config.enabled}
-                        onChange={(e) => handleToggleOAuth(e.target.checked)}
-                        disabled={disabled}
-                        className="rounded border-gray-300"
-                    />
-                    <span className="text-small">Enable OAuth</span>
-                </label>
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="bg-gradient-to-r from-sky-50 to-sky-100 px-6 py-3 border-b border-sky-200">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-sky-900">OAuth Configuration</h3>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={config.enabled}
+                            onChange={(e) => handleToggleOAuth(e.target.checked)}
+                            disabled={disabled}
+                            className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="text-sm font-medium text-sky-900">Enable OAuth</span>
+                    </label>
+                </div>
             </div>
 
-            {config.enabled && (
-                <div className="space-y-3">
+            {config.enabled ? (
+                <div className="p-6 space-y-6">
                     {/* OAuth Flow Selection */}
-                    <div className="form-group">
-                        <label htmlFor="oauthFlow">OAuth Flow Type</label>
+                    <div>
+                        <label htmlFor="oauthFlow" className="block text-sm font-medium text-gray-700 mb-2">
+                            OAuth Flow Type
+                        </label>
                         <select
                             id="oauthFlow"
                             value={config.flow || 'authorization_code_pkce'}
                             onChange={(e) => handleFlowChange(e.target.value as 'authorization_code' | 'authorization_code_pkce' | 'client_credentials')}
                             disabled={disabled || isAuthenticated}
-                            className="w-full"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         >
                             <option value="authorization_code_pkce">Authorization Code Flow with PKCE (User Authentication)</option>
                             <option value="authorization_code">Authorization Code Flow (User Authentication)</option>
                             <option value="client_credentials">Client Credentials Flow (Service-to-Service)</option>
                         </select>
-                        <div className="text-small text-muted mt-2 space-y-1">
-                            {config.flow === 'client_credentials' ? (
-                                <>
-                                    <div>• Direct token exchange using client credentials</div>
-                                    <div>• No user authentication required</div>
-                                    <div>• Requires confidential client with client secret</div>
-                                </>
-                            ) : config.flow === 'authorization_code' ? (
-                                <>
-                                    <div>• Traditional flow with client secret</div>
-                                    <div>• For confidential clients</div>
-                                    <div>• User redirected for authentication</div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="text-green-600 font-medium">✓ Recommended for browser apps</div>
-                                    <div>• Most secure flow without client secret</div>
-                                    <div>• Public client configuration</div>
-                                </>
-                            )}
+                        <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+                            <div className="text-xs space-y-1 text-gray-700">
+                                {config.flow === 'client_credentials' ? (
+                                    <>
+                                        <div>• Direct token exchange using client credentials</div>
+                                        <div>• No user authentication required</div>
+                                        <div>• Requires confidential client with client secret</div>
+                                    </>
+                                ) : config.flow === 'authorization_code' ? (
+                                    <>
+                                        <div>• Traditional flow with client secret</div>
+                                        <div>• For confidential clients</div>
+                                        <div>• User redirected for authentication</div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="text-green-600 font-semibold">✓ Recommended for browser apps</div>
+                                        <div>• Most secure flow without client secret</div>
+                                        <div>• Public client configuration</div>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
 
                     {/* Client ID */}
-                    <div className="form-group">
-                        <label htmlFor="clientId">Client ID</label>
+                    <div>
+                        <label htmlFor="clientId" className="block text-sm font-medium text-gray-700 mb-2">
+                            Client ID
+                            <span className="text-red-500 ml-1">*</span>
+                        </label>
                         <input
                             type="text"
                             id="clientId"
@@ -527,14 +547,17 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                             onChange={(e) => handleConfigUpdate('clientId', e.target.value)}
                             placeholder="Enter your OAuth client ID"
                             disabled={disabled}
-                            className="w-full"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         />
                     </div>
 
                     {/* Client Secret - for client credentials and traditional auth code flow */}
                     {(config.flow === 'client_credentials' || config.flow === 'authorization_code') && (
-                        <div className="form-group">
-                            <label htmlFor="clientSecret">Client Secret</label>
+                        <div>
+                            <label htmlFor="clientSecret" className="block text-sm font-medium text-gray-700 mb-2">
+                                Client Secret
+                                <span className="text-red-500 ml-1">*</span>
+                            </label>
                             <div className="relative">
                                 <input
                                     type={showClientSecret ? "text" : "password"}
@@ -543,15 +566,15 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                                     onChange={(e) => handleConfigUpdate('clientSecret', e.target.value)}
                                     placeholder="Enter client secret"
                                     disabled={disabled}
-                                    className="w-full pr-8"
+                                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowClientSecret(!showClientSecret)}
                                     disabled={disabled}
-                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted"
+                                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
                                 >
-                                    {showClientSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                    {showClientSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
                         </div>
@@ -559,8 +582,10 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
 
                     {/* Authorization Endpoint - only for authorization code flows */}
                     {(config.flow !== 'client_credentials') && (
-                        <div className="form-group">
-                            <label htmlFor="authEndpoint">Authorization Endpoint</label>
+                        <div>
+                            <label htmlFor="authEndpoint" className="block text-sm font-medium text-gray-700 mb-2">
+                                Authorization Endpoint
+                            </label>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -569,14 +594,14 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                                     onChange={(e) => handleConfigUpdate('authEndpoint', e.target.value)}
                                     placeholder="https://auth.example.com/oauth/authorize"
                                     disabled={disabled}
-                                    className="w-full"
+                                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                 />
                                 {config.authEndpoint && (
                                     <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                                         {isValidUrl(config.authEndpoint) ? (
-                                            <CheckCircle className="w-3 h-3 text-green-500" />
+                                            <CheckCircle2 className="w-4 h-4 text-green-500" />
                                         ) : (
-                                            <AlertCircle className="w-3 h-3 text-red-500" />
+                                            <XCircle className="w-4 h-4 text-red-500" />
                                         )}
                                     </div>
                                 )}
@@ -585,8 +610,10 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                     )}
 
                     {/* Token Endpoint */}
-                    <div className="form-group">
-                        <label htmlFor="tokenEndpoint">Token Endpoint</label>
+                    <div>
+                        <label htmlFor="tokenEndpoint" className="block text-sm font-medium text-gray-700 mb-2">
+                            Token Endpoint
+                        </label>
                         <div className="relative">
                             <input
                                 type="text"
@@ -595,14 +622,14 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                                 onChange={(e) => handleConfigUpdate('tokenEndpoint', e.target.value)}
                                 placeholder="https://auth.example.com/oauth/token"
                                 disabled={disabled}
-                                className="w-full"
+                                className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                             />
                             {config.tokenEndpoint && (
                                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                                     {isValidUrl(config.tokenEndpoint) ? (
-                                        <CheckCircle className="w-3 h-3 text-green-500" />
+                                        <CheckCircle2 className="w-4 h-4 text-green-500" />
                                     ) : (
-                                        <AlertCircle className="w-3 h-3 text-red-500" />
+                                        <XCircle className="w-4 h-4 text-red-500" />
                                     )}
                                 </div>
                             )}
@@ -611,8 +638,10 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
 
                     {/* Logout Endpoint - only for PKCE authorization code flow */}
                     {config.flow === 'authorization_code_pkce' && (
-                        <div className="form-group">
-                            <label htmlFor="logoutEndpoint">Logout Endpoint (Optional)</label>
+                        <div>
+                            <label htmlFor="logoutEndpoint" className="block text-sm font-medium text-gray-700 mb-2">
+                                Logout Endpoint <span className="text-gray-500 text-xs">(Optional)</span>
+                            </label>
                             <div className="relative">
                                 <input
                                     type="text"
@@ -621,14 +650,14 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                                     onChange={(e) => handleConfigUpdate('logoutEndpoint', e.target.value)}
                                     placeholder="https://auth.example.com/oauth/logout"
                                     disabled={disabled}
-                                    className="w-full"
+                                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                                 />
                                 {config.logoutEndpoint && (
                                     <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                                         {isValidUrl(config.logoutEndpoint) ? (
-                                            <CheckCircle className="w-3 h-3 text-green-500" />
+                                            <CheckCircle2 className="w-4 h-4 text-green-500" />
                                         ) : (
-                                            <AlertCircle className="w-3 h-3 text-red-500" />
+                                            <XCircle className="w-4 h-4 text-red-500" />
                                         )}
                                     </div>
                                 )}
@@ -637,8 +666,10 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                     )}
 
                     {/* Scope */}
-                    <div className="form-group">
-                        <label htmlFor="scope">Scope</label>
+                    <div>
+                        <label htmlFor="scope" className="block text-sm font-medium text-gray-700 mb-2">
+                            Scope
+                        </label>
                         <input
                             type="text"
                             id="scope"
@@ -646,42 +677,47 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
                             onChange={(e) => handleConfigUpdate('scope', e.target.value)}
                             placeholder="openid profile email"
                             disabled={disabled}
-                            className="w-full"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
                         />
                     </div>
 
                     {/* Validation Status */}
-                    <div className="text-small">
-                        <div className="flex items-center space-x-4">
-                            <span className={config.clientId ? 'status-connected' : 'text-muted'}>
-                                Client ID: {config.clientId ? '[OK]' : '[ ]'}
-                            </span>
+                    <div className="pt-3 border-t border-gray-200">
+                        <div className="flex flex-wrap items-center gap-4 text-xs">
+                            <div className={`flex items-center space-x-1.5 ${config.clientId ? 'text-green-700' : 'text-gray-400'}`}>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>Client ID</span>
+                            </div>
                             {(config.flow === 'client_credentials' || config.flow === 'authorization_code') && (
-                                <span className={config.clientSecret ? 'status-connected' : 'text-muted'}>
-                                    Secret: {config.clientSecret ? '[OK]' : '[ ]'}
-                                </span>
+                                <div className={`flex items-center space-x-1.5 ${config.clientSecret ? 'text-green-700' : 'text-gray-400'}`}>
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span>Secret</span>
+                                </div>
                             )}
                             {config.flow !== 'client_credentials' && (
-                                <span className={isValidUrl(config.authEndpoint) ? 'status-connected' : 'text-muted'}>
-                                    Auth: {isValidUrl(config.authEndpoint) ? '[OK]' : '[ ]'}
-                                </span>
+                                <div className={`flex items-center space-x-1.5 ${isValidUrl(config.authEndpoint) ? 'text-green-700' : 'text-gray-400'}`}>
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span>Auth</span>
+                                </div>
                             )}
-                            <span className={isValidUrl(config.tokenEndpoint) ? 'status-connected' : 'text-muted'}>
-                                Token: {isValidUrl(config.tokenEndpoint) ? '[OK]' : '[ ]'}
-                            </span>
+                            <div className={`flex items-center space-x-1.5 ${isValidUrl(config.tokenEndpoint) ? 'text-green-700' : 'text-gray-400'}`}>
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                <span>Token</span>
+                            </div>
                             {isAuthenticated && (
-                                <span className="status-connected">
-                                    Logged In: [OK]
-                                </span>
+                                <div className="flex items-center space-x-1.5 text-green-700">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span>Logged In</span>
+                                </div>
                             )}
                         </div>
                     </div>
                 </div>
-            )}
-
-            {!config.enabled && (
-                <div className="text-small text-muted">
-                    Enable OAuth to configure authentication with your identity provider
+            ) : (
+                <div className="p-6">
+                    <div className="text-sm text-gray-600 text-center py-4">
+                        Enable OAuth to configure authentication with your identity provider
+                    </div>
                 </div>
             )}
         </div>
@@ -693,108 +729,122 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
         }
 
         return (
-            <div className="card">
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-small font-medium">OAuth Discovery</h3>
-                    <button
-                        onClick={discoverOAuthEndpoints}
-                        disabled={disabled || isDiscovering || !serverUrl || !config.clientId || ((config.flow === 'client_credentials' || config.flow === 'authorization_code') && !config.clientSecret)}
-                        className="btn-outline btn-small"
-                        title={(!config.clientId || ((config.flow === 'client_credentials' || config.flow === 'authorization_code') && !config.clientSecret)) ? "Client ID and Secret required for discovery" : "Automatically discover OAuth endpoints"}
-                    >
-                        {isDiscovering ? (
-                            <>
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                Discovering...
-                            </>
-                        ) : (
-                            <>
-                                <Play className="w-3 h-3" />
-                                Discover
-                            </>
-                        )}
-                    </button>
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div className="bg-gradient-to-r from-green-50 to-green-100 px-6 py-3 border-b border-green-200">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-green-900">OAuth Discovery</h3>
+                        <button
+                            onClick={discoverOAuthEndpoints}
+                            disabled={disabled || isDiscovering || !serverUrl || !config.clientId || ((config.flow === 'client_credentials' || config.flow === 'authorization_code') && !config.clientSecret)}
+                            className="px-3 py-1.5 text-xs bg-white hover:bg-green-50 text-green-700 border border-green-200 rounded-md transition-colors flex items-center space-x-1.5 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={(!config.clientId || ((config.flow === 'client_credentials' || config.flow === 'authorization_code') && !config.clientSecret)) ? "Client ID and Secret required for discovery" : "Automatically discover OAuth endpoints"}
+                        >
+                            {isDiscovering ? (
+                                <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>Discovering...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Play className="w-3 h-3" />
+                                    <span>Discover</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
 
-                <div className="discovery-steps-container space-y-3">
-                    {discoverySteps.map((step) => (
-                        <div key={step.id} className="border rounded p-3">
-                            <div className="flex items-center space-x-3">
-                                <div className="flex-shrink-0">
-                                    {getStepIcon(step)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium">{step.name}</div>
-                                    {step.url && (
-                                        <div className="text-xs text-muted font-mono break-all">{step.url}</div>
-                                    )}
-                                    {step.status === 'success' && step.data && (
-                                        <div className="mt-2 text-xs">
-                                            {step.id === 'mcp-endpoint' && (
-                                                <div>
-                                                    {step.data.wwwAuthenticate && (
-                                                        <div className="mb-1">
-                                                            <span className="font-medium">WWW-Authenticate:</span> Found
+                <div className="p-6">
+                    <div className="space-y-3">
+                        {discoverySteps.map((step) => (
+                            <div key={step.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                <div className="flex items-start space-x-3">
+                                    <div className="flex-shrink-0 mt-0.5">
+                                        {getStepIcon(step)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium text-gray-900 mb-1">{step.name}</div>
+                                        {step.url && (
+                                            <div className="text-xs text-gray-600 font-mono break-all mb-2">{step.url}</div>
+                                        )}
+                                        {step.status === 'success' && step.data && (
+                                            <div className="mt-2 text-xs space-y-1">
+                                                {step.id === 'mcp-endpoint' && (
+                                                    <div>
+                                                        {step.data.wwwAuthenticate && (
+                                                            <div className="text-green-700 mb-1">✓ WWW-Authenticate header found</div>
+                                                        )}
+                                                        <div className="text-gray-700 break-all">
+                                                            <span className="font-medium">Resource Metadata:</span> {step.data.resourceMetadata}
                                                         </div>
-                                                    )}
-                                                    <div className="break-all">
-                                                        <span className="font-medium">Resource Metadata URL:</span> {step.data.resourceMetadata}
+                                                        {step.data.note && (
+                                                            <div className="text-amber-700 mt-1">{step.data.note}</div>
+                                                        )}
                                                     </div>
-                                                    {step.data.note && (
-                                                        <div className="text-yellow-600 mt-1">{step.data.note}</div>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {step.id === 'resource' && (
-                                                <div>
-                                                    <div className="mb-1 break-all">
-                                                        <span className="font-medium">Final URL:</span> {step.url}
+                                                )}
+                                                {step.id === 'resource' && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-gray-700 break-all">
+                                                            <span className="font-medium">Auth Server:</span> {step.data.authorization_servers?.[0]}
+                                                        </div>
+                                                        <div className="text-gray-700">
+                                                            <span className="font-medium">Scopes:</span> {step.data.scopes_supported?.join(', ') || 'none'}
+                                                        </div>
                                                     </div>
-                                                    <div className="break-all">Authorization Server: {step.data.authorization_servers?.[0]}</div>
-                                                    <div className="break-all">Scopes: {step.data.scopes_supported?.join(', ') || 'none'}</div>
-                                                </div>
-                                            )}
-                                            {step.id === 'authserver' && (
-                                                <div className="space-y-1">
-                                                    {step.data.authorization_endpoint && (
-                                                        <div className="break-all">Auth URL: {step.data.authorization_endpoint}</div>
-                                                    )}
-                                                    {step.data.token_endpoint && (
-                                                        <div className="break-all">Token URL: {step.data.token_endpoint}</div>
-                                                    )}
-                                                    {step.data.end_session_endpoint && (
-                                                        <div className="break-all">Logout URL: {step.data.end_session_endpoint}</div>
-                                                    )}
-                                                    {step.data.issuer && (
-                                                        <div className="break-all">Issuer: {step.data.issuer}</div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                    {step.status === 'error' && step.error && (
-                                        <div className="mt-1 text-xs text-red-600 break-words">{step.error}</div>
-                                    )}
+                                                )}
+                                                {step.id === 'authserver' && (
+                                                    <div className="space-y-1">
+                                                        {step.data.authorization_endpoint && (
+                                                            <div className="text-gray-700 break-all">
+                                                                <span className="font-medium">Auth:</span> {step.data.authorization_endpoint}
+                                                            </div>
+                                                        )}
+                                                        {step.data.token_endpoint && (
+                                                            <div className="text-gray-700 break-all">
+                                                                <span className="font-medium">Token:</span> {step.data.token_endpoint}
+                                                            </div>
+                                                        )}
+                                                        {step.data.end_session_endpoint && (
+                                                            <div className="text-gray-700 break-all">
+                                                                <span className="font-medium">Logout:</span> {step.data.end_session_endpoint}
+                                                            </div>
+                                                        )}
+                                                        {step.data.issuer && (
+                                                            <div className="text-gray-700 break-all">
+                                                                <span className="font-medium">Issuer:</span> {step.data.issuer}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        {step.status === 'error' && step.error && (
+                                            <div className="mt-1 text-xs text-red-600 break-words bg-red-50 p-2 rounded border border-red-200">
+                                                {step.error}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
 
-                    {discoverySteps.length === 0 && (
-                        <div className="text-center text-muted py-4">
-                            <div className="text-sm">Click "Discover" to automatically find OAuth endpoints</div>
-                            <div className="text-xs mt-1">
-                                This will query your MCP server for OAuth configuration
+                        {discoverySteps.length === 0 && (
+                            <div className="text-center py-8">
+                                <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                                <div className="text-sm text-gray-600 mb-1">Click "Discover" to automatically find OAuth endpoints</div>
+                                <div className="text-xs text-gray-500">
+                                    This will query your MCP server for OAuth configuration
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             {/* Scope Error Alert */}
             {scopeError && scopeError.length > 0 && (
                 <ScopeErrorAlert
@@ -809,7 +859,7 @@ export const OAuthTab: React.FC<OAuthConfigProps> = ({
             {isAuthenticated && renderUserInfo()}
 
             {/* Two-column layout: Config on left, Discovery on right */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                     {renderConfigPanel()}
                 </div>

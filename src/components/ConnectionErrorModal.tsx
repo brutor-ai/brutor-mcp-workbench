@@ -17,9 +17,6 @@
 import React from 'react';
 import { X, AlertCircle, Server, Shield } from 'lucide-react';
 
-// Add this import to ConfigTab.tsx at the top:
-// import { ConnectionErrorModal } from './ConnectionErrorModal';
-
 interface ConnectionErrorModalProps {
     error: any;
     onClose: () => void;
@@ -285,7 +282,7 @@ export const ConnectionErrorModal: React.FC<ConnectionErrorModalProps> = ({ erro
                 <div className="flex justify-end space-x-2 p-4 border-t bg-gray-50">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                     >
                         Close
                     </button>

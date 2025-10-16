@@ -44,7 +44,7 @@ export const ResourceSelector: React.FC<ResourceSelectorProps> = ({
   const getMimeTypeIcon = (mimeType?: string) => {
     if (!mimeType) return <FileText className="w-4 h-4" />;
     
-    if (mimeType.includes('text')) return <FileText className="w-4 h-4 text-blue-600" />;
+    if (mimeType.includes('text')) return <FileText className="w-4 h-4 text-primary-600" />;
     if (mimeType.includes('json')) return <FileText className="w-4 h-4 text-green-600" />;
     if (mimeType.includes('image')) return <FileText className="w-4 h-4 text-purple-600" />;
     
@@ -72,7 +72,7 @@ export const ResourceSelector: React.FC<ResourceSelectorProps> = ({
             placeholder="Search resources..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
             autoFocus
           />
         </div>
@@ -118,7 +118,7 @@ export const ResourceSelector: React.FC<ResourceSelectorProps> = ({
                         e.stopPropagation();
                         handleSelect(resource);
                       }}
-                      className="flex-shrink-0 ml-2 p-1 text-blue-600 hover:bg-blue-50 rounded"
+                      className="flex-shrink-0 ml-2 p-1 text-primary-600 hover:bg-blue-50 rounded"
                       title="Attach this resource"
                     >
                       <Play className="w-4 h-4" />

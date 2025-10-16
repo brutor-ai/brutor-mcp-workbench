@@ -15,11 +15,10 @@
  */
 
 import { useState, useCallback } from 'react';
-import { ChatMessage, MCPTool, ChatAttachment } from '../types';
-import { MCPClient } from '../lib/mcpClient';
-import { OpenAIClient, sanitizeToolArguments } from '../lib/openaiClient';
+import { ChatMessage, ChatAttachment, ServerAttributedTool } from '../types';
+import { OpenAIClient } from '../lib/openaiClient';
 
-export const useChat = () => {
+export const useMultiServerChat = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMessage, setCurrentMessage] = useState('');
     const [currentAttachments, setCurrentAttachments] = useState<ChatAttachment[]>([]);
@@ -29,7 +28,7 @@ export const useChat = () => {
         setCurrentAttachments(prev => [...prev, attachment]);
     }, []);
 
-    const removeAttachment = useCallback((id: string) => {
+    const removeCurrentAttachment = useCallback((id: string) => {
         setCurrentAttachments(prev => prev.filter(att => att.id !== id));
     }, []);
 
@@ -37,13 +36,25 @@ export const useChat = () => {
         setCurrentAttachments([]);
     }, []);
 
+    /**
+     * Send message with multi-server tool routing
+     * @param openaiClient - Shared OpenAI client
+     * @param aggregatedTools - Tools from ALL connected servers
+     * @param toolRouter - Function to route tool calls to correct server
+     * @param resourceReaders - Map of serverId -> resource read function
+     * @param promptGetters - Map of serverId -> prompt get function
+     * @param onToolCall - Callback for logging tool calls
+     */
     const sendMessage = useCallback(async (
-        mcpClient: MCPClient | null,
         openaiClient: OpenAIClient | null,
-        tools: MCPTool[],
-        onToolCall?: (toolName: string, args: any, result: any) => void
+        aggregatedTools: ServerAttributedTool[],
+        toolRouter: (toolName: string, args: any) => Promise<{ result: any; serverId: string; serverName: string }>,
+        resourceReaders: Map<string, (uri: string) => Promise<any>>,
+        promptGetters: Map<string, (name: string, args?: any) => Promise<any>>,
+        onToolCall?: (toolName: string, args: any, result: any, serverId: string, serverName: string) => void
     ) => {
-        if (!currentMessage.trim() || isProcessing || !mcpClient || !openaiClient) return;
+        if (!openaiClient || !currentMessage.trim() && currentAttachments.length === 0) return;
+        if (isProcessing) return;
 
         const userMessage: ChatMessage = {
             role: 'user',
@@ -57,14 +68,18 @@ export const useChat = () => {
         setCurrentAttachments([]);
         setIsProcessing(true);
 
-        console.log('Starting message processing...', {
+        console.log('Starting multi-server message processing...', {
             message: currentMessage,
             attachments: currentAttachments.length,
-            availableTools: tools.length
+            availableTools: aggregatedTools.length,
+            toolsByServer: aggregatedTools.reduce((acc, tool) => {
+                acc[tool.serverName] = (acc[tool.serverName] || 0) + 1;
+                return acc;
+            }, {} as Record<string, number>)
         });
 
         try {
-            // Build single system message with all attachment context
+            // Build system message with all attachment context
             let systemContext = '';
             const attachmentContexts: string[] = [];
 
@@ -73,9 +88,13 @@ export const useChat = () => {
                     let contextContent = '';
 
                     if (att.type === 'prompt') {
-                        // Handle prompt attachments
                         try {
-                            const promptResult = await mcpClient.getPrompt(att.data.prompt.name, att.data.args || {});
+                            const promptGetter = promptGetters.get(att.serverId);
+                            if (!promptGetter) {
+                                throw new Error(`Server ${att.serverName} not available`);
+                            }
+
+                            const promptResult = await promptGetter(att.data.prompt.name, att.data.args || {});
                             if (promptResult.messages && promptResult.messages.length > 0) {
                                 contextContent = promptResult.messages
                                     .map((msg: any) => {
@@ -87,17 +106,15 @@ export const useChat = () => {
                             } else {
                                 contextContent = att.description || `Prompt: ${att.name}`;
                             }
-                            attachmentContexts.push(`PROMPT "${att.name}":\n${contextContent}`);
+                            attachmentContexts.push(`[${att.serverName}] PROMPT "${att.name}":\n${contextContent}`);
                         } catch (error) {
-                            console.warn(`Failed to get prompt content for ${att.name}:`, error);
-                            attachmentContexts.push(`PROMPT "${att.name}" (Error: ${error instanceof Error ? error.message : 'Unknown error'})`);
+                            console.warn(`Failed to get prompt from ${att.serverName}:`, error);
+                            attachmentContexts.push(`[${att.serverName}] PROMPT "${att.name}" (Error: ${error instanceof Error ? error.message : 'Unknown'})`);
                         }
                     } else if (att.type === 'resource') {
-                        // Handle both regular resources and resource templates
                         if (att.data.template) {
-                            // This is a resource template
+                            // Resource template
                             try {
-                                // Generate the actual URI from template and parameters
                                 let uri = att.data.template.uriTemplate;
                                 if (att.data.params) {
                                     Object.entries(att.data.params).forEach(([key, value]) => {
@@ -105,50 +122,49 @@ export const useChat = () => {
                                     });
                                 }
 
-                                // Read the resource using the generated URI
-                                const resourceResult = await mcpClient.readResource(uri);
+                                const resourceReader = resourceReaders.get(att.serverId);
+                                if (!resourceReader) {
+                                    throw new Error(`Server ${att.serverName} not available`);
+                                }
+
+                                const resourceResult = await resourceReader(uri);
                                 if (resourceResult.contents && resourceResult.contents.length > 0) {
                                     const content = resourceResult.contents
                                         .map((c: any) => {
                                             if (c.text) return c.text;
-                                            if (c.blob) return `[Binary content: ${c.blob.substring(0, 100)}...]`;
+                                            if (c.blob) return `[Binary content]`;
                                             return JSON.stringify(c, null, 2);
                                         })
                                         .join('\n');
 
-                                    attachmentContexts.push(`RESOURCE TEMPLATE "${att.name}" (URI: ${uri}):\n${content}`);
+                                    attachmentContexts.push(`[${att.serverName}] RESOURCE TEMPLATE "${att.name}" (URI: ${uri}):\n${content}`);
                                 } else {
-                                    attachmentContexts.push(`RESOURCE TEMPLATE "${att.name}" (URI: ${uri}): No content available`);
+                                    attachmentContexts.push(`[${att.serverName}] RESOURCE TEMPLATE "${att.name}": No content`);
                                 }
                             } catch (error) {
-                                console.warn(`Failed to read resource template ${att.name}:`, error);
-                                attachmentContexts.push(`RESOURCE TEMPLATE "${att.name}": Error - ${error instanceof Error ? error.message : 'Unknown error'}`);
+                                console.warn(`Failed to read resource template from ${att.serverName}:`, error);
+                                attachmentContexts.push(`[${att.serverName}] RESOURCE TEMPLATE "${att.name}": Error`);
                             }
                         } else {
-                            // This is a regular resource
+                            // Regular resource
                             const resourceInfo = att.description ? ` (${att.description})` : '';
-                            attachmentContexts.push(`RESOURCE "${att.name}"${resourceInfo}:\n${att.content || 'No content available'}`);
+                            attachmentContexts.push(`[${att.serverName}] RESOURCE "${att.name}"${resourceInfo}:\n${att.content || 'No content'}`);
                         }
-                    } else {
-                        // Other attachment types
-                        attachmentContexts.push(`${att.type.toUpperCase()} "${att.name}":\n${att.content || 'No content available'}`);
                     }
                 }
 
-                // Build comprehensive system context
-                systemContext = `You have access to the following attached content. Use this information to help answer the user's question:
+                systemContext = `You have access to the following attached content from multiple MCP servers:
 
 ${attachmentContexts.join('\n\n---\n\n')}
 
 ---
 
-Please use the above information to provide helpful and accurate responses. Reference specific content when relevant.`;
+Use this information to provide helpful responses. When referencing content, you can mention which server it came from.`;
             }
 
             // Create messages array for OpenAI
             const messagesForAI: ChatMessage[] = [];
 
-            // Add system message with attachment context if we have attachments
             if (systemContext) {
                 messagesForAI.push({
                     role: 'system',
@@ -156,39 +172,26 @@ Please use the above information to provide helpful and accurate responses. Refe
                 });
             }
 
-            // Add the conversation history - CRITICAL: Only include complete message sequences
+            // Add conversation history (filter out orphaned tool calls)
             const conversationMessages = newMessages.filter(msg => {
-                // Always include user messages
                 if (msg.role === 'user') return true;
-
-                // Only include assistant messages that don't have orphaned tool_calls
                 if (msg.role === 'assistant') {
-                    // If it has tool_calls, skip it - tool sequences should be complete or removed
                     if (msg.tool_calls) {
-                        console.warn('Filtering out assistant message with tool_calls from history to prevent errors');
+                        console.warn('Filtering out assistant message with tool_calls from history');
                         return false;
                     }
                     return true;
                 }
-
-                // Skip tool messages and system messages from previous attachments
                 return false;
-            });
-
-            console.log('Building message history:', {
-                totalMessages: newMessages.length,
-                filteredMessages: conversationMessages.length,
-                hasSystemContext: !!systemContext
             });
 
             messagesForAI.push(...conversationMessages);
 
-            // Format tools for OpenAI
-            const formattedTools = openaiClient.formatToolsForOpenAI(tools);
-            console.log('Formatted tools for OpenAI:', formattedTools.length);
+            // Format ALL tools from ALL servers for OpenAI
+            const formattedTools = openaiClient.formatToolsForOpenAI(aggregatedTools);
+            console.log(`Sending ${formattedTools.length} tools from ${new Set(aggregatedTools.map(t => t.serverName)).size} servers to OpenAI`);
 
-            // Call OpenAI with the properly structured messages
-            console.log('Calling OpenAI API...');
+            // Call OpenAI
             const startTime = Date.now();
             const response = await openaiClient.chat(messagesForAI, formattedTools);
             const aiDuration = Date.now() - startTime;
@@ -196,15 +199,9 @@ Please use the above information to provide helpful and accurate responses. Refe
 
             const assistantMessage = response.choices[0].message;
 
-            console.log('Assistant message received:', {
-                hasToolCalls: !!assistantMessage.tool_calls,
-                toolCallsLength: assistantMessage.tool_calls?.length || 0,
-                hasContent: !!assistantMessage.content
-            });
-
-            // Handle tool calls if present
+            // Handle tool calls - route to correct servers
             if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-                console.log(`Processing ${assistantMessage.tool_calls.length} tool calls...`);
+                console.log(`Processing ${assistantMessage.tool_calls.length} tool calls across servers...`);
                 const toolResults: ChatMessage[] = [];
 
                 for (const toolCall of assistantMessage.tool_calls) {
@@ -212,22 +209,16 @@ Please use the above information to provide helpful and accurate responses. Refe
                     const toolStartTime = Date.now();
 
                     try {
-                        const sanitizedToolCall = sanitizeToolArguments(toolCall);
-                        const toolArgs = JSON.parse(sanitizedToolCall.function.arguments);
+                        const toolArgs = JSON.parse(toolCall.function.arguments);
 
-                        console.log('Original tool call:', toolCall.function.arguments);
-                        console.log('Sanitized tool args:', toolArgs);
-
-                        const result = await mcpClient.callTool(
-                            toolCall.function.name,
-                            toolArgs
-                        );
+                        // Route to correct server
+                        const { result, serverId, serverName } = await toolRouter(toolCall.function.name, toolArgs);
 
                         const toolDuration = Date.now() - toolStartTime;
-                        console.log(`Tool ${toolCall.function.name} completed in ${toolDuration}ms`);
+                        console.log(`Tool ${toolCall.function.name} completed in ${toolDuration}ms on server ${serverName}`);
 
                         if (onToolCall) {
-                            onToolCall(toolCall.function.name, toolArgs, result);
+                            onToolCall(toolCall.function.name, toolArgs, result, serverId, serverName);
                         }
 
                         let content = '';
@@ -236,7 +227,7 @@ Please use the above information to provide helpful and accurate responses. Refe
                                 .map((c: any) => {
                                     if (c.type === 'text') return c.text;
                                     if (c.text) return c.text;
-                                    if (c.blob) return `[Binary content: ${c.blob.substring(0, 100)}...]`;
+                                    if (c.blob) return `[Binary content]`;
                                     return JSON.stringify(c, null, 2);
                                 })
                                 .join('\n');
@@ -244,11 +235,13 @@ Please use the above information to provide helpful and accurate responses. Refe
                             content = JSON.stringify(result, null, 2);
                         }
 
-                        // CRITICAL: Always add a tool response, even if content is empty
+                        // Add server attribution to tool response
+                        const attributedContent = `[Server: ${serverName}]\n${content}`;
+
                         toolResults.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
-                            content: content || 'Tool executed successfully with no output'
+                            content: attributedContent || 'Tool executed successfully'
                         });
                     } catch (error) {
                         const toolDuration = Date.now() - toolStartTime;
@@ -256,20 +249,17 @@ Please use the above information to provide helpful and accurate responses. Refe
 
                         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-                        // Parse the tool arguments for the callback, handling potential JSON errors
                         let parsedArgs: any = {};
                         try {
                             parsedArgs = JSON.parse(toolCall.function.arguments);
-                        } catch (parseError) {
-                            console.warn('Failed to parse tool arguments for callback:', parseError);
+                        } catch {
                             parsedArgs = { raw: toolCall.function.arguments };
                         }
 
                         if (onToolCall) {
-                            onToolCall(toolCall.function.name, parsedArgs, { error: errorMessage });
+                            onToolCall(toolCall.function.name, parsedArgs, { error: errorMessage }, '', '');
                         }
 
-                        // CRITICAL: Always add a tool response for every tool_call_id, even on error
                         toolResults.push({
                             role: 'tool',
                             tool_call_id: toolCall.id,
@@ -278,29 +268,9 @@ Please use the above information to provide helpful and accurate responses. Refe
                     }
                 }
 
-                // Verify we have a response for every tool call
-                const responseIds = new Set(toolResults.map(r => r.tool_call_id));
-                const callIds = new Set(assistantMessage.tool_calls.map(tc => tc.id));
-
-                // Add missing responses if any (this is a safety net)
-                for (const callId of callIds) {
-                    if (!responseIds.has(callId)) {
-                        console.error(`Missing tool response for call_id: ${callId}, adding error response`);
-                        const missingCall = assistantMessage.tool_calls.find(tc => tc.id === callId);
-                        toolResults.push({
-                            role: 'tool',
-                            tool_call_id: callId,
-                            content: `Error: Tool call failed to produce a response (${missingCall?.function?.name || 'unknown tool'})`
-                        });
-                    }
-                }
-
-                console.log(`Collected ${toolResults.length} tool responses for ${assistantMessage.tool_calls.length} tool calls`);
-
-                // For final response, build messages with system context maintained
+                // Build messages for final response
                 const messagesWithTools: ChatMessage[] = [];
 
-                // Include system context again for final call
                 if (systemContext) {
                     messagesWithTools.push({
                         role: 'system',
@@ -308,7 +278,6 @@ Please use the above information to provide helpful and accurate responses. Refe
                     });
                 }
 
-                // Add conversation + assistant message + tool results
                 messagesWithTools.push(...conversationMessages);
                 messagesWithTools.push(assistantMessage);
                 messagesWithTools.push(...toolResults);
@@ -322,44 +291,25 @@ Please use the above information to provide helpful and accurate responses. Refe
 
                 const finalMessage = finalResponse.choices[0].message;
 
-                // Check if the final response also has tool calls (multi-turn tool calling)
+                // Handle potential multi-turn tool calling
                 if (finalMessage.tool_calls && finalMessage.tool_calls.length > 0) {
-                    console.log(`⚠️ Final response has ${finalMessage.tool_calls.length} more tool calls - processing additional turn...`);
-
-                    // Process the additional tool calls
+                    console.log(`Additional ${finalMessage.tool_calls.length} tool calls detected...`);
+                    // For simplicity, handle one more round
                     const additionalToolResults: ChatMessage[] = [];
 
                     for (const toolCall of finalMessage.tool_calls) {
-                        console.log(`Executing additional tool: ${toolCall.function.name}`);
-                        const toolStartTime = Date.now();
-
                         try {
-                            const sanitizedToolCall = sanitizeToolArguments(toolCall);
-                            const toolArgs = JSON.parse(sanitizedToolCall.function.arguments);
-
-                            console.log('Additional tool args:', toolArgs);
-
-                            const result = await mcpClient.callTool(
-                                toolCall.function.name,
-                                toolArgs
-                            );
-
-                            const toolDuration = Date.now() - toolStartTime;
-                            console.log(`Additional tool ${toolCall.function.name} completed in ${toolDuration}ms`);
+                            const toolArgs = JSON.parse(toolCall.function.arguments);
+                            const { result, serverId, serverName } = await toolRouter(toolCall.function.name, toolArgs);
 
                             if (onToolCall) {
-                                onToolCall(toolCall.function.name, toolArgs, result);
+                                onToolCall(toolCall.function.name, toolArgs, result, serverId, serverName);
                             }
 
                             let content = '';
                             if (result.content) {
                                 content = result.content
-                                    .map((c: any) => {
-                                        if (c.type === 'text') return c.text;
-                                        if (c.text) return c.text;
-                                        if (c.blob) return `[Binary content: ${c.blob.substring(0, 100)}...]`;
-                                        return JSON.stringify(c, null, 2);
-                                    })
+                                    .map((c: any) => c.type === 'text' ? c.text : (c.text || JSON.stringify(c)))
                                     .join('\n');
                             } else {
                                 content = JSON.stringify(result, null, 2);
@@ -368,58 +318,29 @@ Please use the above information to provide helpful and accurate responses. Refe
                             additionalToolResults.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
-                                content: content || 'Tool executed successfully with no output'
+                                content: `[Server: ${serverName}]\n${content}`
                             });
                         } catch (error) {
-                            const toolDuration = Date.now() - toolStartTime;
-                            console.error(`Additional tool ${toolCall.function.name} failed after ${toolDuration}ms:`, error);
-
-                            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-                            if (onToolCall) {
-                                let parsedArgs: any = {};
-                                try {
-                                    parsedArgs = JSON.parse(toolCall.function.arguments);
-                                } catch {
-                                    parsedArgs = { raw: toolCall.function.arguments };
-                                }
-                                onToolCall(toolCall.function.name, parsedArgs, { error: errorMessage });
-                            }
-
                             additionalToolResults.push({
                                 role: 'tool',
                                 tool_call_id: toolCall.id,
-                                content: `Error executing tool: ${errorMessage}`
+                                content: `Error: ${error instanceof Error ? error.message : 'Unknown'}`
                             });
                         }
                     }
 
-                    console.log(`Collected ${additionalToolResults.length} additional tool responses`);
-
-                    // Get the truly final response with all tool results
                     const messagesWithAdditionalTools: ChatMessage[] = [];
-
                     if (systemContext) {
-                        messagesWithAdditionalTools.push({
-                            role: 'system',
-                            content: systemContext
-                        });
+                        messagesWithAdditionalTools.push({ role: 'system', content: systemContext });
                     }
-
                     messagesWithAdditionalTools.push(...conversationMessages);
                     messagesWithAdditionalTools.push(assistantMessage);
                     messagesWithAdditionalTools.push(...toolResults);
                     messagesWithAdditionalTools.push(finalMessage);
                     messagesWithAdditionalTools.push(...additionalToolResults);
 
-                    console.log('Getting truly final response from OpenAI...');
-                    const trulyFinalStartTime = Date.now();
-
                     const trulyFinalResponse = await openaiClient.chat(messagesWithAdditionalTools, formattedTools);
-                    const trulyFinalDuration = Date.now() - trulyFinalStartTime;
-                    console.log(`Truly final OpenAI response completed in ${trulyFinalDuration}ms`);
 
-                    // Update messages with complete multi-turn sequence
                     setMessages([
                         ...newMessages,
                         assistantMessage,
@@ -429,7 +350,6 @@ Please use the above information to provide helpful and accurate responses. Refe
                         trulyFinalResponse.choices[0].message
                     ]);
                 } else {
-                    // No additional tool calls, just update with final response
                     setMessages([
                         ...newMessages,
                         assistantMessage,
@@ -438,8 +358,7 @@ Please use the above information to provide helpful and accurate responses. Refe
                     ]);
                 }
             } else {
-                // No tool calls, just add the response
-                console.log('No tool calls needed, adding direct response');
+                // No tool calls
                 setMessages([...newMessages, assistantMessage]);
             }
 
@@ -448,7 +367,7 @@ Please use the above information to provide helpful and accurate responses. Refe
 
         } catch (error) {
             console.error('Message processing failed:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             setMessages([
                 ...newMessages,
                 { role: 'assistant', content: `Error: ${errorMessage}` }
@@ -460,35 +379,27 @@ Please use the above information to provide helpful and accurate responses. Refe
     }, [currentMessage, messages, isProcessing, currentAttachments]);
 
     const addSystemMessage = useCallback((content: string) => {
-        console.log('Adding system message:', content);
         setMessages(prev => [...prev, { role: 'system', content }]);
     }, []);
 
     const clearMessages = useCallback(() => {
-        console.log('Clearing all messages');
         setMessages([]);
     }, []);
 
-    const addMessage = useCallback((message: ChatMessage) => {
-        console.log('Adding message:', message.role, message.content.substring(0, 100));
-        setMessages(prev => [...prev, message]);
+    const removeMessage = useCallback((index: number) => {
+        setMessages(prev => prev.filter((_, i) => i !== index));
     }, []);
 
-    const updateLastMessage = useCallback((content: string) => {
-        setMessages(prev => {
-            const newMessages = [...prev];
-            if (newMessages.length > 0) {
-                newMessages[newMessages.length - 1] = {
-                    ...newMessages[newMessages.length - 1],
-                    content
+    const removeAttachmentFromMessage = useCallback((messageIndex: number, attachmentId: string) => {
+        setMessages(prev => prev.map((msg, i) => {
+            if (i === messageIndex && msg.attachments) {
+                return {
+                    ...msg,
+                    attachments: msg.attachments.filter(att => att.id !== attachmentId)
                 };
             }
-            return newMessages;
-        });
-    }, []);
-
-    const removeLastMessage = useCallback(() => {
-        setMessages(prev => prev.slice(0, -1));
+            return msg;
+        }));
     }, []);
 
     return {
@@ -499,12 +410,11 @@ Please use the above information to provide helpful and accurate responses. Refe
         sendMessage,
         addSystemMessage,
         clearMessages,
-        addMessage,
-        updateLastMessage,
-        removeLastMessage,
+        removeMessage,
+        removeAttachmentFromMessage,
         currentAttachments,
         addAttachment,
-        removeAttachment,
+        removeAttachment: removeCurrentAttachment,
         clearAttachments
     };
 };

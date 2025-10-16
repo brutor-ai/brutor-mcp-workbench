@@ -151,7 +151,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
               id={key}
               value={promptArgs[key] || ''}
               onChange={(e) => handleArgChange(key, parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder={argDef.description}
             />
             {argDef.description && (
@@ -170,7 +170,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
               id={key}
               value={Array.isArray(promptArgs[key]) ? promptArgs[key].join(', ') : promptArgs[key] || ''}
               onChange={(e) => handleArgChange(key, e.target.value.split(',').map(s => s.trim()).filter(s => s))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder={argDef.description || "Enter items separated by commas"}
               rows={2}
             />
@@ -191,7 +191,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
               id={key}
               value={promptArgs[key] || ''}
               onChange={(e) => handleArgChange(key, e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder={argDef.description}
             />
             {argDef.description && (
@@ -274,7 +274,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
                 placeholder="Search prompts..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 autoFocus={!selectedPrompt}
               />
             </div>
@@ -416,7 +416,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
                       <button
                         onClick={handleSubmit}
                         disabled={!canSubmit}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-1"
+                        className="px-4 py-2 bg-primary-500 text-white text-sm rounded-md hover:bg-primary-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center space-x-1"
                       >
                         <Play className="w-3 h-3" />
                         <span>Use Prompt</span>
