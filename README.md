@@ -520,7 +520,6 @@ The Logs Panel provides comprehensive monitoring of all operations across all se
 **Utility Components:**
 - `AttachmentPanel.tsx`: Unified attachment browser with three tabs (Resources/Templates/Prompts)
 - `PdfUploader.tsx`: PDF processing with text extraction
-- `AttachmentPreview.tsx`: Attachment display with expand/collapse
 - `ConnectionErrorModal.tsx`: Detailed error diagnostics
 - `ScopeErrorAlert.tsx`: OAuth scope error guidance
 

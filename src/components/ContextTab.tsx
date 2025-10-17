@@ -28,8 +28,7 @@ import {
     ChevronDown,
     ChevronRight,
     AlertCircle,
-    Copy,
-    RefreshCw
+    Copy
 } from 'lucide-react';
 import { ChatMessage, AggregatedCapabilities } from '../types';
 import { ServerBadge } from './servers/ServerBadge.tsx';

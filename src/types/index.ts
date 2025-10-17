@@ -262,48 +262,6 @@ export interface MCPLog {
 }
 
 // ============================================================================
-// STATE MANAGEMENT TYPES
-// ============================================================================
-
-/**
- * Overall multi-server state
- */
-export interface MultiServerState {
-    servers: Map<string, ServerConfig>;           // All server configurations
-    connections: Map<string, ServerConnection>;   // All active/inactive connections
-    activeServerId: string | null;                // Currently selected server (if needed for UI)
-}
-
-/**
- * Client state (legacy - kept for compatibility)
- */
-export interface ClientState {
-    mcpServerUrl: string;
-    openaiApiKey: string;
-    connected: boolean;
-    loading: boolean;
-    error: string | null;
-}
-
-/**
- * Chat state (legacy - kept for compatibility)
- */
-export interface ChatState {
-    messages: ChatMessage[];
-    currentMessage: string;
-    isProcessing: boolean;
-}
-
-/**
- * UI state (legacy - kept for compatibility)
- */
-export interface UIState {
-    showSettings: boolean;
-    selectedTab: 'tools' | 'resources' | 'prompts';
-    showLogs: boolean;
-}
-
-// ============================================================================
 // EVENT TYPES
 // ============================================================================
 
@@ -312,31 +270,10 @@ export interface UIState {
  */
 export type MCPEventType = 'connected' | 'disconnected' | 'capabilitiesLoaded' | 'error' | 'preConnectionTests';
 
-/**
- * MCP event data
- */
-export interface MCPEventData {
-    connected?: any;
-    disconnected?: void;
-    capabilitiesLoaded?: MCPCapabilities;
-    error?: Error;
-    preConnectionTests?: any;
-}
-
 // ============================================================================
 // UTILITY TYPES
 // ============================================================================
 
-/**
- * Server selection context for React components
- */
-export interface ServerSelectionContext {
-    availableServers: ServerConfig[];
-    connectedServers: ServerConnection[];
-    getConnection: (serverId: string) => ServerConnection | null;
-    connectToServer: (serverId: string) => Promise<boolean>;
-    disconnectServer: (serverId: string) => Promise<void>;
-}
 
 /**
  * Tool routing result - includes which server handled the tool call
@@ -346,20 +283,6 @@ export interface ToolRoutingResult {
     serverId: string;       // Which server handled this
     serverName: string;     // Display name of server
     duration?: number;      // Optional timing information
-}
-
-/**
- * Aggregated statistics across all servers
- */
-export interface AggregatedStats {
-    totalServers: number;
-    connectedServers: number;
-    totalTools: number;
-    totalResources: number;
-    totalPrompts: number;
-    totalResourceTemplates: number;
-    toolsByServer: Record<string, number>;
-    resourcesByServer: Record<string, number>;
 }
 
 // ============================================================================
@@ -407,29 +330,4 @@ export interface UseMCPServersReturn {
     connectedCount: number;
     isAnyLoading: boolean;
     isAnyConnected: boolean;
-}
-
-/**
- * Return type for useMultiServerChat hook
- */
-export interface UseMultiServerChatReturn {
-    messages: ChatMessage[];
-    currentMessage: string;
-    setCurrentMessage: (message: string) => void;
-    isProcessing: boolean;
-    sendMessage: (
-        openaiClient: any,
-        aggregatedTools: ServerAttributedTool[],
-        toolRouter: (toolName: string, args: any) => Promise<ToolRoutingResult>,
-        resourceReaders: Map<string, (uri: string) => Promise<any>>,
-        promptGetters: Map<string, (name: string, args?: any) => Promise<any>>,
-        onToolCall?: (toolName: string, args: any, result: any, serverId: string, serverName: string) => void
-    ) => Promise<void>;
-    addSystemMessage: (content: string) => void;
-    clearMessages: () => void;
-    currentAttachments: ChatAttachment[];
-    addAttachment: (attachment: ChatAttachment) => void;
-    clearAttachments: () => void;
-    removeMessage: (index: number) => void;
-    removeAttachment: (messageIndex: number, attachmentId: string) => void;
 }

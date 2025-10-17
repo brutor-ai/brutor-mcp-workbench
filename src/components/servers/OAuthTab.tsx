@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, CheckCircle, AlertCircle, User, LogOut, Loader2, Play, Server, Shield, CheckCircle2, XCircle } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, User, LogOut, Loader2, Play, Server, Shield, CheckCircle2, XCircle } from 'lucide-react';
 import { OAuthConfig } from '../../types';
 import { ScopeErrorAlert } from './ScopeErrorAlert.tsx';
 
