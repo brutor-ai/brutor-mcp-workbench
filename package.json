@@ -1,7 +1,7 @@
 {
-  "name": "brutor-mcp-client",
+  "name": "brutor-mcp-workbench",
   "version": "1.0.0",
-  "description": "Brutor - A modern React-based MCP AI client with OpenAI integration",
+  "description": "Brutor MCP Workbench - A modern React-based MCP AI client with OpenAI integration",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -43,7 +43,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/brutor-mcp-client"
+    "url": "https://github.com/brutor-ai/brutor-mcp-workbench"
   },
   "keywords": [
     "Brutor",

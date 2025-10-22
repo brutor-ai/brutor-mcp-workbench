@@ -234,7 +234,7 @@ export abstract class BaseAuthFlowManager {
         });
 
         const requestBody = new URLSearchParams({
-            grant_type: 'authorization_code',
+            grant_type: this.config.flow,
             client_id: this.config.clientId,
             code: code,
             redirect_uri: window.location.origin + '/callback'

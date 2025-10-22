@@ -235,7 +235,7 @@ export const ServerCard: React.FC<ServerCardProps> = ({
                                         <User className="w-3.5 h-3.5 text-green-600" />
                                         <div className="flex-1 min-w-0">
                                             <div className="text-xs font-medium text-green-800 truncate">
-                                                Logged in as: {userInfo.preferred_username || userInfo.login || userInfo.email || 'User'}
+                                                Logged in as: {userInfo.preferred_username || userInfo.username || userInfo.login || userInfo.email || 'User'}
                                             </div>
                                             {userInfo.email && userInfo.email !== userInfo.preferred_username && userInfo.email !== userInfo.login && (
                                                 <div className="text-xs text-green-600 truncate">
