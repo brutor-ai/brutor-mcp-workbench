@@ -15,48 +15,44 @@
  */
 
 /*
- * TraditionalAuthCodeFlowManager - Traditional OAuth with Popup (no page reload!)
- * Prevents duplicate token exchange from double postMessage + global listener cleanup
+ * TraditionalAuthCodeFlowManager - Traditional OAuth with Popup
+ * Handles HubSpot's redirect chain issue with localStorage polling
  */
 
 import { BaseAuthFlowManager, TokenInfo } from './BaseAuthFlowManager';
-import { OAuthConfig } from '../types';
+import { OAuthConfig, OAuthFlow } from '../types';
 
 export class TraditionalAuthCodeFlowManager extends BaseAuthFlowManager {
-    // Track if we're already processing a callback to prevent duplicates
     private processingCallback: boolean = false;
+    private messageCount: number = 0;
+    private storagePollingInterval: number | null = null;
 
     constructor(config: OAuthConfig, onLogEntry?: (entry: any) => void, serverId?: string) {
         super(config, onLogEntry, serverId);
     }
 
-    // ============================================================================
-    // POPUP-BASED TRADITIONAL AUTHORIZATION FLOW
-    // ============================================================================
-
     async startAuthorizationFlow(): Promise<void> {
-        if (this.config.flow !== 'authorization_code') {
+        if (this.config.flow !== OAuthFlow.AuthorizationCode) {
             throw new Error('This method is only for traditional authorization code flow');
         }
 
-        if (!this.config.authEndpoint || !this.config.clientId || !this.config.clientSecret) {
-            throw new Error('Authorization endpoint, client ID, and client secret are required');
+        if (!this.config.authEndpoint || !this.config.clientId) {
+            throw new Error('Authorization endpoint and client ID are required');
         }
 
         console.log('🔄 Starting traditional auth code flow (popup) for server:', this.serverId);
 
-        // Reset processing flag
         this.processingCallback = false;
+        this.messageCount = 0;
 
-        // Generate state parameter
+        // Clear any old callback data
+        localStorage.removeItem('oauth_callback_data');
+
         const state = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-
-        // Store state
         this.setSessionItem('state', state);
 
-        console.log('✅ Generated state parameter for popup flow');
+        console.log('✅ Generated state parameter for popup flow:', state);
 
-        // Build authorization URL
         const authUrl = new URL(this.config.authEndpoint);
         const stateWithServerId = `${state}:${this.serverId}`;
         const params = new URLSearchParams({
@@ -69,7 +65,13 @@ export class TraditionalAuthCodeFlowManager extends BaseAuthFlowManager {
 
         authUrl.search = params.toString();
 
-        // Open popup
+        console.log('🔐 Authorization URL:', {
+            endpoint: this.config.authEndpoint,
+            clientId: this.config.clientId,
+            scope: this.config.scope,
+            state: stateWithServerId
+        });
+
         const popup = this.openOAuthPopup(authUrl.toString());
         if (!popup) {
             throw new Error('Failed to open OAuth popup. Please allow popups for this site.');
@@ -77,52 +79,129 @@ export class TraditionalAuthCodeFlowManager extends BaseAuthFlowManager {
 
         this.oauthPopup = popup;
 
-        // Wait for callback via postMessage
+        const popupCheckInterval = setInterval(() => {
+            if (popup.closed) {
+                clearInterval(popupCheckInterval);
+                if (!this.processingCallback) {
+                    console.log('⚠️ Popup was closed by user before completion');
+                    this.cleanup();
+                }
+            }
+        }, 500);
+
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
+                clearInterval(popupCheckInterval);
+                this.stopStoragePolling();
                 this.cleanup();
                 reject(new Error('OAuth flow timed out after 5 minutes'));
             }, 5 * 60 * 1000);
 
-            // Listen for message from callback page
+            // Start polling localStorage
+            this.startStoragePolling(async () => {
+                if (this.processingCallback) return;
+
+                const storedData = localStorage.getItem('oauth_callback_data');
+                if (storedData) {
+                    try {
+                        const callbackData = JSON.parse(storedData);
+                        console.log('💾 Found callback data in localStorage:', {
+                            hasCode: !!callbackData.code,
+                            serverId: callbackData.serverId
+                        });
+
+                        if (callbackData.serverId !== this.serverId) return;
+
+                        const age = Date.now() - callbackData.timestamp;
+                        if (age > 30000) {
+                            localStorage.removeItem('oauth_callback_data');
+                            return;
+                        }
+
+                        this.processingCallback = true;
+                        localStorage.removeItem('oauth_callback_data');
+
+                        clearTimeout(timeout);
+                        clearInterval(popupCheckInterval);
+                        this.stopStoragePolling();
+
+                        console.log('✅ Processing callback from localStorage');
+
+                        try {
+                            if (callbackData.error) {
+                                throw new Error(callbackData.error_description || callbackData.error);
+                            }
+
+                            if (callbackData.code && callbackData.state) {
+                                await this.handlePopupCallback(callbackData.code, callbackData.state);
+
+                                if (popup && !popup.closed) {
+                                    popup.close();
+                                }
+
+                                this.cleanup();
+                                resolve();
+                            }
+                        } catch (error) {
+                            if (popup && !popup.closed) {
+                                popup.close();
+                            }
+                            this.cleanup();
+                            reject(error);
+                        }
+                    } catch (error) {
+                        console.error('❌ Failed to parse callback data:', error);
+                    }
+                }
+            });
+
+            // postMessage listener
             this.messageListener = async (event: MessageEvent) => {
-                // Security: Verify message origin
+                this.messageCount++;
+
                 if (event.origin !== window.location.origin) {
-                    console.warn('⚠️ Ignoring message from unknown origin:', event.origin);
+                    console.warn('⚠️ Ignoring message from unknown origin');
                     return;
                 }
 
-                // Check if this is an OAuth callback message for this server
                 if (event.data.type === 'oauth-callback' && event.data.serverId === this.serverId) {
-                    // CRITICAL: Check if already processing to prevent duplicate token exchange
                     if (this.processingCallback) {
-                        console.log('⚠️ Already processing callback, ignoring duplicate message');
+                        console.log(`⚠️ Already processing callback, ignoring duplicate #${this.messageCount}`);
                         return;
                     }
 
-                    // Mark as processing immediately
                     this.processingCallback = true;
+                    console.log('✅ Processing callback via postMessage');
+
                     clearTimeout(timeout);
+                    clearInterval(popupCheckInterval);
+                    this.stopStoragePolling();
 
                     try {
                         if (event.data.error) {
-                            const errorDescription = event.data.error_description || event.data.error;
-                            throw new Error(errorDescription);
+                            throw new Error(event.data.error_description || event.data.error);
                         }
 
-                        if (event.data.code && event.data.state) {
-                            await this.handlePopupCallback(event.data.code, event.data.state);
+                        if (event.data.code) {
+                            await this.handlePopupCallback(event.data.code, event.data.state || '');
+
+                            if (popup && !popup.closed) {
+                                popup.close();
+                            }
+
                             this.cleanup();
                             resolve();
                         }
                     } catch (error) {
+                        if (popup && !popup.closed) {
+                            popup.close();
+                        }
                         this.cleanup();
                         reject(error);
                     }
                 }
             };
 
-            // Register listener using the base class method (ensures cleanup of old listeners)
             this.registerMessageListener(this.messageListener);
 
             if (this.onLogEntry) {
@@ -132,7 +211,7 @@ export class TraditionalAuthCodeFlowManager extends BaseAuthFlowManager {
                     status: 'pending',
                     operation: 'oauth-popup-opened',
                     details: {
-                        flow: 'authorization_code',
+                        flow: OAuthFlow.AuthorizationCode,
                         serverId: this.serverId
                     }
                 });
@@ -140,131 +219,81 @@ export class TraditionalAuthCodeFlowManager extends BaseAuthFlowManager {
         });
     }
 
-    // ============================================================================
-    // HANDLE POPUP CALLBACK (called from postMessage)
-    // ============================================================================
+    private startStoragePolling(callback: () => void): void {
+        console.log('🔄 Starting localStorage polling for HubSpot fallback');
+        this.storagePollingInterval = window.setInterval(() => {
+            callback();
+        }, 500);
+    }
+
+    private stopStoragePolling(): void {
+        if (this.storagePollingInterval !== null) {
+            console.log('🛑 Stopping localStorage polling');
+            clearInterval(this.storagePollingInterval);
+            this.storagePollingInterval = null;
+        }
+    }
 
     private async handlePopupCallback(code: string, stateWithServerId: string): Promise<void> {
-        console.log('🔵 Processing traditional auth callback from popup for server:', this.serverId);
+        console.log('🔵 Processing traditional auth callback for server:', this.serverId);
 
-        // Extract server ID from state
         let state: string;
         let callbackServerId: string;
-        if (stateWithServerId.includes(':')) {
+        if (stateWithServerId && stateWithServerId.includes(':')) {
             [state, callbackServerId] = stateWithServerId.split(':');
         } else {
-            state = stateWithServerId;
+            state = stateWithServerId || '';
             callbackServerId = 'default';
         }
 
-        // Verify this callback is for this server
         if (callbackServerId !== this.serverId) {
-            throw new Error(`OAuth callback is for different server (expected: ${this.serverId}, got: ${callbackServerId})`);
+            throw new Error(`OAuth callback is for different server`);
         }
 
-        // Verify state parameter (GitHub doesn't always send it back, so we're lenient)
         const storedState = this.getSessionItem('state');
         if (state && storedState && state !== storedState) {
-            throw new Error('Invalid state parameter - possible CSRF attack');
+            throw new Error('Invalid state parameter');
         }
 
-        if (state && storedState) {
-            console.log('✅ State parameter validated');
-        } else {
-            console.warn('⚠️ No state parameter validation (normal for some providers like GitHub)');
-        }
+        console.log('✅ State parameter validated');
 
-        // Exchange code for tokens (this can only be done once!)
         const tokenData = await this.exchangeCodeForTokens(code);
-
-        // Clean up stored state immediately after successful exchange
         this.removeSessionItem('state');
 
-        // Try to decode user info from token, or create placeholder
         const userInfo = this.extractUserInfoFromToken(tokenData.access_token) || {
             sub: 'user',
             name: 'User',
             preferred_username: 'user'
         };
 
-        // Persist token and user info
         this.persistToken(tokenData, userInfo);
-
-        console.log('✅ Traditional auth popup callback completed successfully for server:', this.serverId);
-
-        if (this.onLogEntry) {
-            this.onLogEntry({
-                source: 'MCP',
-                type: 'connection',
-                status: 'success',
-                operation: 'oauth-popup-callback',
-                details: {
-                    flow: 'authorization_code',
-                    serverId: this.serverId
-                }
-            });
-        }
+        console.log('✅ Traditional auth callback completed successfully');
     }
-
-    // ============================================================================
-    // CLEANUP - Reset processing flag
-    // ============================================================================
 
     protected cleanup(): void {
+        console.log('🧹 Cleaning up OAuth flow state');
+        this.stopStoragePolling();
         super.cleanup();
         this.processingCallback = false;
+        this.messageCount = 0;
     }
 
-    // ============================================================================
-    // FALLBACK: Handle redirect-based callback (for backward compatibility)
-    // ============================================================================
-
     async handleAuthorizationCallback(): Promise<TokenInfo> {
-        // This method is for backward compatibility if someone still uses redirect flow
-        console.warn('⚠️ Using redirect-based callback - consider using popup flow instead');
-
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
-        const stateWithServerId = urlParams.get('state');
         const error = urlParams.get('error');
 
         if (error) {
-            const errorDescription = urlParams.get('error_description') || error;
-            throw new Error(`Authorization failed: ${errorDescription}`);
+            throw new Error(`Authorization failed: ${urlParams.get('error_description') || error}`);
         }
 
         if (!code) {
             throw new Error('No authorization code received');
         }
 
-        // Extract and verify state (if provided)
-        if (stateWithServerId) {
-            let state: string;
-            let callbackServerId: string;
-            if (stateWithServerId.includes(':')) {
-                [state, callbackServerId] = stateWithServerId.split(':');
-            } else {
-                state = stateWithServerId;
-                callbackServerId = 'default';
-            }
-
-            if (callbackServerId !== this.serverId) {
-                throw new Error(`Callback for different server`);
-            }
-
-            const storedState = this.getSessionItem('state');
-            if (storedState && state !== storedState) {
-                throw new Error('Invalid state parameter');
-            }
-        }
-
-        // Exchange code for tokens
         const tokenData = await this.exchangeCodeForTokens(code);
-
-        // Clean up
         this.removeSessionItem('state');
 
-        // Extract and persist user info
         const userInfo = this.extractUserInfoFromToken(tokenData.access_token);
         this.persistToken(tokenData, userInfo);
 

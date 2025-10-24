@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { OAuthConfig } from '../types';
+import { OAuthConfig, OAuthFlow } from '../types';
 import { AuthCodeFlowManager } from './AuthCodeFlowManager';
 import { TraditionalAuthCodeFlowManager } from './TraditionalAuthCodeFlowManager';
 
@@ -38,17 +38,19 @@ export class OAuthTokenManager {
         this.onLogEntry = onLogEntry;
         this.serverId = serverId || 'default';
 
-        console.log('🔵 Creating OAuthTokenManager for server:', this.serverId);
+        console.log(`🔵 Creating OAuthTokenManager for ${this.config.flow} and server ${this.serverId}`);
 
-        if (config.flow === 'authorization_code_pkce') {
+        if (config.flow === OAuthFlow.AuthorizationCodePKCE) {
             this.authCodeManager = new AuthCodeFlowManager(config, onLogEntry, this.serverId);
-        } else if (config.flow === 'authorization_code') {
+        } else if (config.flow === OAuthFlow.AuthorizationCode) {
             this.traditionalAuthManager = new TraditionalAuthCodeFlowManager(config, onLogEntry, this.serverId);
+        } else {
+            throw new Error(`The ${this.config.flow} is not supported at the moment`);
         }
     }
 
     async getValidToken(): Promise<string> {
-        if (this.config.flow === 'authorization_code_pkce' || this.config.flow === 'authorization_code') {
+        if (this.config.flow === OAuthFlow.AuthorizationCodePKCE || this.config.flow === OAuthFlow.AuthorizationCode) {
             return await this.getAuthCodeToken();
         } else {
             return await this.getClientCredentialsToken();
@@ -56,7 +58,7 @@ export class OAuthTokenManager {
     }
 
     private async getAuthCodeToken(): Promise<string> {
-        const manager = this.config.flow === 'authorization_code_pkce'
+        const manager = this.config.flow === OAuthFlow.AuthorizationCodePKCE
             ? this.authCodeManager
             : this.traditionalAuthManager;
 
@@ -231,9 +233,9 @@ export class OAuthTokenManager {
     logout(performOAuthLogout: boolean = false): void {
         console.log('🧹 Logout called for server:', this.serverId);
 
-        if (this.config.flow === 'authorization_code_pkce' && this.authCodeManager) {
+        if (this.config.flow === OAuthFlow.AuthorizationCodePKCE && this.authCodeManager) {
             this.authCodeManager.logout(performOAuthLogout);
-        } else if (this.config.flow === 'authorization_code' && this.traditionalAuthManager) {
+        } else if (this.config.flow === OAuthFlow.AuthorizationCode && this.traditionalAuthManager) {
             this.traditionalAuthManager.logout(performOAuthLogout);
         }
 
@@ -245,78 +247,11 @@ export class OAuthTokenManager {
     }
 
     isTokenValid(): boolean {
-        if (this.config.flow === 'authorization_code_pkce' && this.authCodeManager) {
+        if (this.config.flow === OAuthFlow.AuthorizationCodePKCE && this.authCodeManager) {
             return this.authCodeManager.isAuthenticated();
-        } else if (this.config.flow === 'authorization_code' && this.traditionalAuthManager) {
+        } else if (this.config.flow === OAuthFlow.AuthorizationCode && this.traditionalAuthManager) {
             return this.traditionalAuthManager.isAuthenticated();
         }
         return false;
-    }
-
-    getAccessToken(): string | null {
-        if (!this.isTokenValid()) return null;
-
-        if (this.config.flow === 'authorization_code_pkce' && this.authCodeManager) {
-            return this.authCodeManager.getAccessToken();
-        } else if (this.config.flow === 'authorization_code' && this.traditionalAuthManager) {
-            return this.traditionalAuthManager.getAccessToken();
-        }
-
-        return null;
-    }
-
-    getTokenInfo(): {
-        hasToken: boolean;
-        expiresIn?: number;
-        flow?: string;
-        userInfo?: any;
-        permissions?: { canRead: boolean; canWrite: boolean };
-        roles?: string[];
-        idToken?: string;
-    } {
-        const manager = this.config.flow === 'authorization_code_pkce'
-            ? this.authCodeManager
-            : this.traditionalAuthManager;
-
-        if (!manager) {
-            return { hasToken: false, flow: this.config.flow };
-        }
-
-        return {
-            ...manager.getTokenInfo(),
-            flow: this.config.flow
-        };
-    }
-
-    getUserPermissions(): { canRead: boolean; canWrite: boolean } {
-        const manager = this.config.flow === 'authorization_code_pkce'
-            ? this.authCodeManager
-            : this.traditionalAuthManager;
-
-        return manager?.getUserPermissions() || { canRead: false, canWrite: false };
-    }
-
-    getUserInfo(): any {
-        const manager = this.config.flow === 'authorization_code_pkce'
-            ? this.authCodeManager
-            : this.traditionalAuthManager;
-
-        return manager?.getUserInfo() || null;
-    }
-
-    getUserRoles(): string[] {
-        const manager = this.config.flow === 'authorization_code_pkce'
-            ? this.authCodeManager
-            : this.traditionalAuthManager;
-
-        return manager?.getUserRoles() || [];
-    }
-
-    hasRole(role: string): boolean {
-        const manager = this.config.flow === 'authorization_code_pkce'
-            ? this.authCodeManager
-            : this.traditionalAuthManager;
-
-        return manager?.hasRole(role) || false;
     }
 }

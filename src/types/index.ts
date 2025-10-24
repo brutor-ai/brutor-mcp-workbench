@@ -72,12 +72,18 @@ export interface ServerConnection {
     error?: string;                // Last connection error if any
 }
 
+export enum OAuthFlow {
+    AuthorizationCode = 'authorization_code',
+    AuthorizationCodePKCE = 'authorization_code_pkce',
+    ClientCredentials = 'client_credentials'
+}
+
 /**
  * OAuth configuration for a server
  */
 export interface OAuthConfig {
     enabled: boolean;
-    flow: 'authorization_code' | 'authorization_code_pkce' | 'client_credentials';
+    flow: OAuthFlow;
     clientId: string;
     clientSecret: string;
     authEndpoint?: string;

@@ -17,6 +17,7 @@
 /*
  * BaseAuthFlowManager - Common OAuth functionality for all flows
  * Proper cleanup of message listeners to prevent stale handlers
+ * FIXED: Improved handling of Chrome extension interference
  */
 
 import { jwtDecode } from 'jwt-decode';
@@ -99,10 +100,22 @@ export abstract class BaseAuthFlowManager {
         // Clean up any existing listener first
         this.cleanupGlobalListener();
 
+        // Wrap the listener to prevent Chrome extension errors from propagating
+        const wrappedListener = (event: MessageEvent) => {
+            try {
+                listener(event);
+            } catch (error) {
+                // Only log errors that aren't Chrome extension related
+                if (error instanceof Error && !error.message.includes('message channel closed')) {
+                    console.error('❌ Error in message listener:', error);
+                }
+            }
+        };
+
         // Register new listener
-        this.messageListener = listener;
-        globalListenerRegistry.set(this.serverId, listener);
-        window.addEventListener('message', listener);
+        this.messageListener = wrappedListener;
+        globalListenerRegistry.set(this.serverId, wrappedListener);
+        window.addEventListener('message', wrappedListener);
 
         console.log('✅ Registered new message listener for server:', this.serverId);
     }
@@ -250,150 +263,153 @@ export abstract class BaseAuthFlowManager {
             requestBody.append('code_verifier', codeVerifier);
         }
 
-        const response = await fetch(this.config.tokenEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Accept': 'application/json'
-            },
-            body: requestBody
-        });
+        try {
+            const response = await fetch(this.config.tokenEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json'
+                },
+                body: requestBody
+            });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            let errorDetail = errorText;
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ Token exchange failed:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
 
-            try {
-                const errorJson = JSON.parse(errorText);
-                errorDetail = errorJson.error_description || errorJson.error || errorText;
-            } catch {
-                // Use raw text if not JSON
+                let errorDetail = errorText;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorDetail = errorJson.error_description || errorJson.error || errorText;
+                } catch {}
+
+                throw new Error(`Token exchange failed: ${response.status} - ${errorDetail}`);
             }
 
-            console.error('❌ Token exchange failed:', {
-                serverId: this.serverId,
-                status: response.status,
-                error: errorDetail
-            });
+            const tokenData: TokenInfo = await response.json();
+            console.log('✅ Token exchange successful for server:', this.serverId);
 
-            throw new Error(`Token exchange failed: ${response.status} - ${errorDetail}`);
+            return tokenData;
+
+        } catch (error) {
+            console.error('❌ Token exchange error:', error);
+            throw error;
         }
-
-        // Handle both JSON and form-encoded responses (GitHub uses form-encoded)
-        const contentType = response.headers.get('content-type');
-        let tokenData: TokenInfo;
-
-        if (contentType?.includes('application/x-www-form-urlencoded')) {
-            const text = await response.text();
-            const params = new URLSearchParams(text);
-            tokenData = {
-                access_token: params.get('access_token')!,
-                token_type: params.get('token_type') || 'bearer',
-                expires_in: parseInt(params.get('expires_in') || '3600'),
-                scope: params.get('scope') || undefined,
-                refresh_token: params.get('refresh_token') || undefined
-            };
-        } else {
-            tokenData = await response.json();
-        }
-
-        // Validate we got an access token
-        if (!tokenData.access_token) {
-            throw new Error('No access token received from authorization server');
-        }
-
-        // Default expires_in if not provided (common with GitHub)
-        if (!tokenData.expires_in) {
-            tokenData.expires_in = 3600;
-        }
-
-        console.log('✅ Token exchange successful for server:', this.serverId);
-
-        if (this.onLogEntry) {
-            this.onLogEntry({
-                source: 'MCP',
-                type: 'connection',
-                status: 'success',
-                operation: 'oauth-token-exchange',
-                details: {
-                    flow: this.config.flow,
-                    serverId: this.serverId
-                }
-            });
-        }
-
-        return tokenData;
     }
 
     // ============================================================================
-    // USER INFO EXTRACTION (common for all flows)
+    // USER INFO EXTRACTION
     // ============================================================================
 
-    protected extractUserInfoFromToken(token: string): UserInfo | null {
+    protected extractUserInfoFromToken(accessToken: string): UserInfo | null {
         try {
-            const decoded = jwtDecode<UserInfo>(token);
-            console.log('✅ User info decoded from token:', {
-                serverId: this.serverId,
+            const decoded = jwtDecode<UserInfo>(accessToken);
+            console.log('✅ Decoded user info from access token:', {
                 sub: decoded.sub,
-                email: decoded.email,
-                name: decoded.name
+                name: decoded.name,
+                email: decoded.email
             });
             return decoded;
         } catch (e) {
-            console.warn('⚠️ Could not decode user info from token (normal for some providers):', e);
+            console.warn('⚠️ Could not decode access token as JWT (this is normal for opaque tokens)');
             return null;
         }
     }
 
     // ============================================================================
-    // TOKEN VALIDATION (common for all flows)
+    // TOKEN VALIDITY
     // ============================================================================
 
     isAuthenticated(): boolean {
-        const hasToken = this.currentToken !== null;
-        const tokenExpired = this.isTokenExpired();
-        const result = hasToken && !tokenExpired;
+        if (!this.currentToken || !this.tokenExpiryTimestamp) {
+            return false;
+        }
 
-        console.log(`${this.constructor.name}.isAuthenticated:`, {
-            serverId: this.serverId,
-            hasToken,
-            tokenExpired,
-            result
-        });
+        // Check if token is expired (with 5 minute buffer)
+        const bufferMs = 5 * 60 * 1000; // 5 minutes
+        const isValid = Date.now() < (this.tokenExpiryTimestamp - bufferMs);
 
-        return result;
+        if (!isValid) {
+            console.log('⚠️ Token expired for server:', this.serverId);
+        }
+
+        return isValid;
     }
-
-    protected isTokenExpired(): boolean {
-        if (!this.currentToken || !this.tokenExpiryTimestamp) return true;
-
-        // Add a 30-second buffer for network latency
-        const buffer = 30000;
-        return Date.now() >= (this.tokenExpiryTimestamp - buffer);
-    }
-
-    // ============================================================================
-    // TOKEN ACCESS (common for all flows)
-    // ============================================================================
 
     getAccessToken(): string | null {
-        if (!this.isAuthenticated()) return null;
+        if (!this.isAuthenticated()) {
+            return null;
+        }
         return this.currentToken?.access_token || null;
+    }
+
+    getIdToken(): string | null {
+        return this.currentToken?.id_token || null;
     }
 
     getUserInfo(): UserInfo | null {
         return this.userInfo;
     }
 
+    getUserRoles(): string[] {
+        if (!this.userInfo) return [];
+
+        const roles: string[] = [];
+
+        // Get realm roles
+        if (this.userInfo.realm_access?.roles) {
+            roles.push(...this.userInfo.realm_access.roles);
+        }
+
+        // Get resource/client roles
+        if (this.userInfo.resource_access) {
+            Object.values(this.userInfo.resource_access).forEach(resource => {
+                if (resource.roles) {
+                    roles.push(...resource.roles);
+                }
+            });
+        }
+
+        return Array.from(new Set(roles)); // Deduplicate
+    }
+
+    hasRole(role: string): boolean {
+        return this.getUserRoles().includes(role);
+    }
+
+    getUserPermissions(): { canRead: boolean; canWrite: boolean } {
+        const roles = this.getUserRoles();
+
+        // Map common role patterns to permissions
+        const canWrite = roles.some(role =>
+            role.toLowerCase().includes('admin') ||
+            role.toLowerCase().includes('write') ||
+            role.toLowerCase().includes('edit') ||
+            role.toLowerCase().includes('manager')
+        );
+
+        const canRead = canWrite || roles.some(role =>
+            role.toLowerCase().includes('read') ||
+            role.toLowerCase().includes('view') ||
+            role.toLowerCase().includes('user')
+        );
+
+        return { canRead, canWrite };
+    }
+
     getTokenInfo(): {
         hasToken: boolean;
         expiresIn?: number;
+        userInfo?: UserInfo | null;
+        permissions?: { canRead: boolean; canWrite: boolean };
         roles?: string[];
-        permissions?: any;
-        userInfo?: UserInfo;
-        idToken?: string;
+        idToken?: string | null;
     } {
-        if (!this.currentToken) {
+        if (!this.isAuthenticated()) {
             return { hasToken: false };
         }
 
@@ -404,151 +420,38 @@ export abstract class BaseAuthFlowManager {
         return {
             hasToken: true,
             expiresIn,
-            roles: this.getUserRoles(),
-            permissions: this.getUserPermissions(),
             userInfo: this.userInfo,
-            idToken: this.currentToken.id_token
+            permissions: this.getUserPermissions(),
+            roles: this.getUserRoles(),
+            idToken: this.getIdToken()
         };
     }
 
     // ============================================================================
-    // PERMISSIONS & ROLES (can be overridden by subclasses)
+    // LOGOUT
     // ============================================================================
 
-    getUserRoles(): string[] {
-        if (!this.userInfo) return [];
-
-        const roles: string[] = [];
-
-        // Add realm roles (Keycloak)
-        if (this.userInfo.realm_access?.roles) {
-            roles.push(...this.userInfo.realm_access.roles);
-        }
-
-        // Add client-specific roles (Keycloak)
-        if (this.userInfo.resource_access?.[this.config.clientId]?.roles) {
-            roles.push(...this.userInfo.resource_access[this.config.clientId].roles);
-        }
-
-        return roles;
-    }
-
-    getUserPermissions(): { canRead: boolean; canWrite: boolean } {
-        if (!this.isAuthenticated() || !this.currentToken) {
-            return { canRead: false, canWrite: false };
-        }
-
-        const roles = this.getUserRoles();
-        const scopes = this.currentToken.scope?.split(/[\s,]+/) || [];
-
-        // Check roles (Keycloak-style)
-        const hasReadRole = roles.includes('todo:read') || roles.includes('todo:write');
-        const hasWriteRole = roles.includes('todo:write');
-
-        // Check scopes (GitHub-style)
-        const hasReadScope = scopes.includes('repo') || scopes.includes('public_repo') || scopes.includes('user');
-        const hasWriteScope = scopes.includes('repo');
-
-        return {
-            canRead: hasReadRole || hasReadScope,
-            canWrite: hasWriteRole || hasWriteScope
-        };
-    }
-
-    hasRole(role: string): boolean {
-        return this.getUserRoles().includes(role);
-    }
-
-    // ============================================================================
-    // LOGOUT (common for all flows)
-    // ============================================================================
-
-    logout(performIdPLogout: boolean = false): void {
-        console.log('🧹 Logout called for server:', this.serverId);
-
-        // Clear local state
-        this.currentToken = null;
-        this.userInfo = null;
-        this.tokenExpiryTimestamp = null;
+    logout(performOAuthLogout: boolean = false): void {
+        console.log('🚪 Logging out for server:', this.serverId);
 
         // Clear stored tokens
         this.clearStoredToken();
-        this.removeSessionItem('state');
-        this.removeSessionItem('code_verifier');
 
-        // Cleanup any popup and listeners
-        this.cleanup();
+        // Clear in-memory tokens
+        this.currentToken = null;
+        this.tokenExpiryTimestamp = null;
+        this.userInfo = null;
 
-        if (this.onLogEntry) {
-            this.onLogEntry({
-                source: 'MCP',
-                type: 'connection',
-                status: 'success',
-                operation: 'oauth-logout',
-                details: {
-                    flow: this.config.flow,
-                    serverId: this.serverId
-                }
-            });
-        }
-
-        // IdP logout if requested
-        if (performIdPLogout && this.config.logoutEndpoint) {
-            this.performIdPLogout();
-        }
-    }
-
-    private performIdPLogout(): void {
-        if (!this.config.logoutEndpoint) return;
-
-        try {
+        // Optionally perform OAuth logout (requires logout endpoint)
+        if (performOAuthLogout && this.config.logoutEndpoint && this.currentToken?.id_token) {
             const logoutUrl = new URL(this.config.logoutEndpoint);
-
-            // Add post_logout_redirect_uri
-            if (this.config.postLogoutRedirectUri) {
-                logoutUrl.searchParams.set('post_logout_redirect_uri', this.config.postLogoutRedirectUri);
-            } else {
-                logoutUrl.searchParams.set('post_logout_redirect_uri', window.location.origin);
-            }
-
-            // Add id_token_hint if available
-            if (this.currentToken?.id_token) {
-                logoutUrl.searchParams.set('id_token_hint', this.currentToken.id_token);
-            } else {
-                // For public clients without id_token, use client_id
-                logoutUrl.searchParams.set('client_id', this.config.clientId);
-            }
-
-            console.log('🔄 Redirecting to IdP logout:', logoutUrl.toString());
-
-            if (this.onLogEntry) {
-                this.onLogEntry({
-                    source: 'MCP',
-                    type: 'connection',
-                    status: 'success',
-                    operation: 'oauth-idp-logout',
-                    details: {
-                        serverId: this.serverId
-                    }
-                });
-            }
+            logoutUrl.searchParams.set('id_token_hint', this.currentToken.id_token);
+            logoutUrl.searchParams.set('post_logout_redirect_uri', window.location.origin);
 
             window.location.href = logoutUrl.toString();
-        } catch (error) {
-            console.error('❌ Failed to perform IdP logout:', error);
-            window.location.reload();
         }
-    }
 
-    // ============================================================================
-    // STATE RESET (for cleanup/recovery)
-    // ============================================================================
-
-    resetState(): void {
-        this.removeSessionItem('state');
-        this.removeSessionItem('code_verifier');
-        this.cleanup();
-        console.log('🧹 State reset for server:', this.serverId);
+        console.log('✅ Logout completed for server:', this.serverId);
     }
 
     // ============================================================================
@@ -556,5 +459,4 @@ export abstract class BaseAuthFlowManager {
     // ============================================================================
 
     abstract startAuthorizationFlow(): Promise<void>;
-    abstract handleAuthorizationCallback(): Promise<TokenInfo>;
 }

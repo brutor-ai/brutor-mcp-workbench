@@ -20,6 +20,7 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 export const OAuthCallback: React.FC = () => {
     const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
     const [message, setMessage] = useState('Processing OAuth callback...');
+    const [debugInfo, setDebugInfo] = useState<any>(null);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -28,91 +29,213 @@ export const OAuthCallback: React.FC = () => {
         const error = urlParams.get('error');
         const errorDescription = urlParams.get('error_description');
 
-        console.log('🔵 OAuth Callback Page:', {
+        // Capture ALL query parameters for debugging
+        const allParams: Record<string, string> = {};
+        urlParams.forEach((value, key) => {
+            allParams[key] = value;
+        });
+
+        // CRITICAL: Check opener early and store reference
+        const hasOpener = !!(window.opener && !window.opener.closed);
+        const openerOrigin = window.location.origin;
+
+        const debug = {
+            url: window.location.href,
             hasCode: !!code,
             hasState: !!state,
             hasError: !!error,
-            state
-        });
+            state: state,
+            allParams: allParams,
+            hasOpener: hasOpener,
+            origin: openerOrigin,
+            timestamp: new Date().toISOString()
+        };
+
+        console.log('🔵 OAuth Callback Page - Full Debug:', debug);
+        setDebugInfo(debug);
 
         // Extract server ID from state parameter
         let serverId: string | null = null;
         if (state && state.includes(':')) {
-            [, serverId] = state.split(':');
+            const parts = state.split(':');
+            serverId = parts[1];
+            console.log('🔍 Extracted serverId from state:', serverId);
+        } else if (state) {
+            serverId = 'default';
+            console.log('⚠️ State parameter exists but no colon separator, using default serverId');
+        }
+
+        // CRITICAL FIX: Store callback data in localStorage as backup
+        // This handles cases where window.opener is lost due to redirect chains
+        if (code || error) {
+            const callbackData = {
+                code: code || undefined,
+                state: state || undefined,
+                error: error || undefined,
+                error_description: errorDescription || undefined,
+                serverId: serverId || 'unknown',
+                timestamp: Date.now()
+            };
+
+            console.log('💾 Storing callback data in localStorage as backup:', callbackData);
+            localStorage.setItem('oauth_callback_data', JSON.stringify(callbackData));
         }
 
         // Check if we have a window.opener (popup mode)
-        if (window.opener && !window.opener.closed) {
-            console.log('✅ Popup mode detected - sending message to opener');
+        if (hasOpener) {
+            console.log('✅ Popup mode detected - window.opener is available');
 
             try {
                 // Handle error case
                 if (error) {
                     console.error('❌ OAuth error:', error, errorDescription);
 
-                    // Send error message to opener
-                    window.opener.postMessage({
+                    const errorMessage = {
                         type: 'oauth-callback',
                         serverId: serverId || 'unknown',
                         error: error,
-                        error_description: errorDescription,
+                        error_description: errorDescription || error,
                         invalid_scopes: urlParams.get('invalid_scopes')?.split(',') || []
-                    }, window.location.origin);
+                    };
+
+                    console.log('📤 Sending error message to opener:', errorMessage);
+
+                    // Send error message to opener
+                    window.opener.postMessage(errorMessage, openerOrigin);
 
                     setStatus('error');
                     setMessage(`Authentication failed: ${errorDescription || error}`);
 
                     // Close popup after delay
+                    console.log('⏱️ Closing popup in 3 seconds...');
                     setTimeout(() => {
+                        console.log('🚪 Attempting to close popup window');
                         window.close();
-                    }, 2000);
+                    }, 3000);
                     return;
                 }
 
                 // Handle success case
-                if (code && state) {
-                    console.log('✅ OAuth code received, sending to opener');
+                if (code) {
+                    console.log('✅ OAuth code received');
+                    console.log('📊 Code length:', code.length);
+                    console.log('📊 State:', state);
 
-                    // Send success message to opener
-                    window.opener.postMessage({
+                    const successMessage = {
                         type: 'oauth-callback',
                         serverId: serverId || 'unknown',
                         code: code,
-                        state: state
-                    }, window.location.origin);
+                        state: state || ''
+                    };
+
+                    console.log('📤 Sending success message to opener:', {
+                        ...successMessage,
+                        code: code.substring(0, 10) + '...' // Don't log full code
+                    });
+
+                    // CRITICAL: Send message multiple times to ensure delivery
+                    // Some browsers/providers have timing issues with postMessage
+                    window.opener.postMessage(successMessage, openerOrigin);
+
+                    // Send again after short delay
+                    setTimeout(() => {
+                        console.log('📤 Sending message again (redundancy)');
+                        window.opener.postMessage(successMessage, openerOrigin);
+                    }, 100);
 
                     setStatus('success');
                     setMessage('Authentication successful! Closing popup...');
 
-                    // Close popup after short delay
+                    // IMPORTANT: Add a longer delay to ensure message is received
+                    console.log('⏱️ Closing popup in 2 seconds...');
                     setTimeout(() => {
-                        window.close();
-                    }, 1000);
+                        console.log('🚪 Attempting to close popup window');
+
+                        // Try to close
+                        try {
+                            window.close();
+                        } catch (e) {
+                            console.error('Failed to close with window.close():', e);
+                        }
+
+                        // Fallback: try to signal opener to close us
+                        try {
+                            if (window.opener && !window.opener.closed) {
+                                window.opener.postMessage({
+                                    type: 'oauth-popup-close-request',
+                                    serverId: serverId || 'unknown'
+                                }, openerOrigin);
+                            }
+                        } catch (e) {
+                            console.error('Failed to send close request:', e);
+                        }
+                    }, 2000);
                     return;
                 }
 
                 // Neither code nor error - shouldn't happen
                 console.warn('⚠️ Callback page loaded without code or error');
+                console.log('📋 Available params:', allParams);
+
                 setStatus('error');
                 setMessage('Invalid callback - missing authorization code');
 
                 setTimeout(() => {
                     window.close();
-                }, 2000);
+                }, 3000);
 
             } catch (err) {
                 console.error('❌ Failed to communicate with opener:', err);
                 setStatus('error');
                 setMessage('Failed to communicate with main window');
+
+                // Still try to close after error
+                setTimeout(() => {
+                    window.close();
+                }, 3000);
             }
         } else {
-            // No opener - this might be a redirect-based flow or opened in new tab
-            console.log('⚠️ No window.opener - redirecting to main app');
+            // NO OPENER - This is the HubSpot issue!
+            // Window.opener was lost during redirect chain
+            console.warn('⚠️ No window.opener - likely lost during redirect chain (HubSpot issue)');
+            console.log('💡 Attempting fallback: Store data and close window');
 
-            // Redirect to main app with parameters preserved
-            const params = new URLSearchParams(window.location.search);
-            params.set('tab', 'connect');
-            window.location.href = `/?${params.toString()}`;
+            if (code) {
+                setStatus('success');
+                setMessage('Authentication successful! Data stored. Please close this window.');
+
+                // Notify user to manually close and check main window
+                console.log('📢 User needs to manually check main application');
+
+                // Try to close anyway after delay
+                setTimeout(() => {
+                    console.log('🚪 Attempting to close (may not work without opener)');
+                    window.close();
+
+                    // If still open, show instructions
+                    if (!window.closed) {
+                        setMessage('Authentication complete! Please close this window manually and return to the main application.');
+                    }
+                }, 3000);
+            } else if (error) {
+                setStatus('error');
+                setMessage(`Authentication failed: ${errorDescription || error}. Please close this window.`);
+
+                setTimeout(() => {
+                    window.close();
+                }, 3000);
+            } else {
+                // Last resort: redirect to main app
+                console.log('⚠️ No opener and no code - redirecting to main app');
+                const params = new URLSearchParams(window.location.search);
+                params.set('tab', 'connect');
+
+                setMessage('Redirecting to main application...');
+
+                setTimeout(() => {
+                    window.location.href = `/?${params.toString()}`;
+                }, 1000);
+            }
         }
     }, []);
 
@@ -156,12 +279,34 @@ export const OAuthCallback: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Manual close instruction if needed */}
+                        {status === 'success' && !debugInfo?.hasOpener && (
+                            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                <p className="text-xs text-blue-700 text-center">
+                                    If this window doesn't close automatically, please close it manually and return to the main application.
+                                </p>
+                            </div>
+                        )}
+
                         {/* Additional info */}
                         <div className="text-xs text-gray-500 text-center">
                             {status === 'processing' && 'Completing authentication...'}
-                            {status === 'success' && 'This window will close automatically'}
+                            {status === 'success' && debugInfo?.hasOpener && 'This window will close automatically'}
+                            {status === 'success' && !debugInfo?.hasOpener && 'Please close this window manually'}
                             {status === 'error' && 'Please try again or contact support'}
                         </div>
+
+                        {/* Debug info in development */}
+                        {import.meta.env.DEV && debugInfo && (
+                            <details className="mt-4 w-full">
+                                <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                                    Debug Info (Dev Only)
+                                </summary>
+                                <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-48">
+                                    {JSON.stringify(debugInfo, null, 2)}
+                                </pre>
+                            </details>
+                        )}
                     </div>
                 </div>
             </div>
