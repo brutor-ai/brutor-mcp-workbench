@@ -1,0 +1,5 @@
+# gitleaks configuration: gitleaks' default rules. Add an allow-list entry only
+# for a value a person has read and found to be a test value or a published
+# example, with the reason; name the file, and the value by a fragment.
+[extend]
+useDefault = true
